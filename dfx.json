@@ -1,0 +1,26 @@
+{
+  "canisters": {
+    "travel3Motoko_backend": {
+      "main": "src/travel3Motoko_backend/main.mo",
+      "type": "motoko"
+    },
+    "travel3Motoko_frontend": {
+      "dependencies": [
+        "travel3Motoko_backend"
+      ],
+      "source": [
+        "src/travel3Motoko_frontend/dist"
+      ],
+      "type": "assets",
+      "workspace": "travel3Motoko_frontend"
+    }
+  },
+  "defaults": {
+    "build": {
+      "args": "",
+      "packtool": ""
+    }
+  },
+  "output_env_file": ".env",
+  "version": 1
+}
