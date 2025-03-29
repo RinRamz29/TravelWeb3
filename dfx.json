@@ -1,18 +1,20 @@
 {
   "canisters": {
-    "travel3Motoko_backend": {
-      "main": "src/travel3Motoko_backend/main.mo",
+    "Travel3Nft_backend": {
+      "main": "src/Travel3Nft_backend/main.mo",
       "type": "motoko"
     },
-    "travel3Motoko_frontend": {
+    "Travel3Nft_frontend": {
       "dependencies": [
-        "travel3Motoko_backend"
+        "Travel3Nft_backend"
       ],
       "source": [
-        "src/travel3Motoko_frontend/dist"
+        "src/Travel3Nft_frontend/dist"
       ],
       "type": "assets",
-      "workspace": "travel3Motoko_frontend"
+      "frontend": {
+        "entrypoint": "src/Travel3Nft_frontend/src/main.jsx"
+      }
     }
   },
   "defaults": {
