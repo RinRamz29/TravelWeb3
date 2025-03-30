@@ -6,39 +6,36 @@ const Header = () => {
   const location = useLocation();
   const { isAuthenticated, principal, login, logout, isLoading } = useAuth();
   
-  const formatPrincipal = (principal) => {
-    if (!principal) return '';
-    const principalText = principal.toString();
-    return `${principalText.substring(0, 5)}...${principalText.substring(principalText.length - 5)}`;
-  };
-  
   return (
     <header className="app-header">
-      <div className="logo-container">
+      <div className="logo">
         <Link to="/">
-          <svg className="logo" width="50" height="50" viewBox="0 0 100 100">
+          <svg className="logo-icon" width="50" height="50" viewBox="0 0 100 100">
             <path d="M50 10 L20 40 L50 70 L80 40 Z" fill="none" stroke="#e84393" strokeWidth="4" />
             <path d="M50 20 L30 40 L50 60 L70 40 Z" fill="#e84393" opacity="0.6" />
           </svg>
+          Travel3 NFT
         </Link>
       </div>
       
       <div className="header-content">
-        <nav>
-          <ul className="nav-links">
+        <nav className="main-nav">
+          <ul>
             <li>
               <Link to="/" className={location.pathname === '/' ? 'active' : ''}>
                 Maps
               </Link>
             </li>
+            {isAuthenticated && (
+              <li>
+                <Link to="/create-nft" className={location.pathname === '/create-nft' ? 'active' : ''}>
+                  Create NFT
+                </Link>
+              </li>
+            )}
             <li>
               <Link to="/my-nfts" className={location.pathname === '/my-nfts' ? 'active' : ''}>
                 My NFTs
-              </Link>
-            </li>
-            <li>
-              <Link to="/create-nft" className={location.pathname === '/create-nft' ? 'active' : ''}>
-                Create NFT
               </Link>
             </li>
           </ul>
@@ -52,7 +49,7 @@ const Header = () => {
           {isLoading ? (
             'Loading...'
           ) : isAuthenticated ? (
-            `Connected: ${formatPrincipal(principal)}`
+            'Disconnect'
           ) : (
             'Connect with Internet Identity'
           )}
