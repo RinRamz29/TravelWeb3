@@ -1,61 +1,76 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState } from 'react';
 
-export const NotificationContext = createContext();
+const NotificationContext = createContext();
+export { NotificationContext };
 
-export const useNotification = () => {
-  return useContext(NotificationContext);
-};
+export const useNotification = () => useContext(NotificationContext);
 
 export const NotificationProvider = ({ children }) => {
   const [notifications, setNotifications] = useState([]);
 
-  // Generate a unique ID for each notification
-  const generateId = () => {
-    return Date.now().toString(36) + Math.random().toString(36).substr(2);
+  const addNotification = (notification) => {
+    const id = Date.now();
+    setNotifications(prev => [...prev, { ...notification, id }]);
+    
+    // Auto-dismiss after timeout
+    setTimeout(() => {
+      dismissNotification(id);
+    }, notification.duration || 5000);
+    
+    return id;
   };
 
-  // Add a notification
-  const addNotification = useCallback((type, message) => {
-    const id = generateId();
-    setNotifications(prev => [...prev, { id, type, message }]);
-    return id;
-  }, []);
-
-  // Remove a notification by ID
-  const removeNotification = useCallback((id) => {
+  const dismissNotification = (id) => {
     setNotifications(prev => prev.filter(notification => notification.id !== id));
-  }, []);
+  };
 
-  // Helper functions for different notification types
-  const showSuccess = useCallback((message) => {
-    return addNotification('success', message);
-  }, [addNotification]);
+  const showSuccess = (message, options = {}) => {
+    return addNotification({
+      type: 'success',
+      message,
+      ...options
+    });
+  };
 
-  const showError = useCallback((message) => {
-    return addNotification('error', message);
-  }, [addNotification]);
+  const showError = (message, options = {}) => {
+    return addNotification({
+      type: 'error',
+      message,
+      ...options
+    });
+  };
 
-  const showInfo = useCallback((message) => {
-    return addNotification('info', message);
-  }, [addNotification]);
+  const showInfo = (message, options = {}) => {
+    return addNotification({
+      type: 'info',
+      message,
+      ...options
+    });
+  };
 
-  const showWarning = useCallback((message) => {
-    return addNotification('warning', message);
-  }, [addNotification]);
-
-  const value = {
-    notifications,
-    addNotification,
-    removeNotification,
-    showSuccess,
-    showError,
-    showInfo,
-    showWarning
+  const showWarning = (message, options = {}) => {
+    return addNotification({
+      type: 'warning',
+      message,
+      ...options
+    });
   };
 
   return (
-    <NotificationContext.Provider value={value}>
+    <NotificationContext.Provider
+      value={{
+        notifications,
+        addNotification,
+        dismissNotification,
+        showSuccess,
+        showError,
+        showInfo,
+        showWarning
+      }}
+    >
       {children}
     </NotificationContext.Provider>
   );
 };
+
+export default NotificationContext;

@@ -4,7 +4,14 @@ import { useAuth } from '../context/AuthContext';
 
 const Header = () => {
   const location = useLocation();
-  const { isAuthenticated, principal, login, logout, isLoading } = useAuth();
+  const { isAuthenticated, principal, login, logout, isLoading, authInitialized } = useAuth();
+  
+  // Debug output
+  React.useEffect(() => {
+    if (authInitialized) {
+      console.log("Auth state in Header:", { isAuthenticated, principal: principal?.toString(), isLoading });
+    }
+  }, [isAuthenticated, principal, isLoading, authInitialized]);
   
   return (
     <header className="app-header">
@@ -46,6 +53,7 @@ const Header = () => {
           onClick={isAuthenticated ? logout : login}
           disabled={isLoading}
         >
+          {isAuthenticated && principal && <span className="principal-preview">{principal.toString().substring(0, 5)}...</span>}
           {isLoading ? (
             'Loading...'
           ) : isAuthenticated ? (

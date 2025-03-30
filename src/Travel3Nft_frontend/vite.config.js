@@ -1,11 +1,13 @@
 import { resolve } from 'path';
 import react from '@vitejs/plugin-react';
 import nodePolyfills from 'rollup-plugin-polyfill-node';
-import { defineConfig, normalizePath } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import environment from 'vite-plugin-environment';
 import dotenv from 'dotenv';
 
-dotenv.config({ path: '../../.env' });
+// Load environment variables from project root and local .env files
+dotenv.config({ path: '../../.env' }); 
+dotenv.config({ path: './.env.local' });
 
 export default defineConfig({
   optimizeDeps: {
@@ -27,7 +29,12 @@ export default defineConfig({
   // Define global variables
   define: {
     // Buffer is used by DFINITY libraries
-    'global.Buffer': ['buffer', 'Buffer'],
+    'global.Buffer': ['buffer', 'Buffer'], 
+    // Explicitly define environment variables
+    'process.env.CANISTER_ID_TRAVEL3NFT_BACKEND': JSON.stringify(process.env.CANISTER_ID_TRAVEL3NFT_BACKEND || process.env.VITE_CANISTER_ID_TRAVEL3NFT_BACKEND),
+    'process.env.CANISTER_ID_TRAVEL3NFT_FRONTEND': JSON.stringify(process.env.CANISTER_ID_TRAVEL3NFT_FRONTEND || process.env.VITE_CANISTER_ID_TRAVEL3NFT_FRONTEND),
+    'process.env.DFX_NETWORK': JSON.stringify(process.env.DFX_NETWORK || process.env.VITE_DFX_NETWORK || 'local'),
+    // Empty object for other process.env references
     'process.env': {}
   },
   server: {
@@ -51,7 +58,8 @@ export default defineConfig({
   },
   plugins: [
     react(),
-    environment("all", { prefix: "CANISTER_" }),
+    environment("all", { prefix: "CANISTER_" }), 
+    environment("all", { prefix: "VITE_" }),
     environment("all", { prefix: "DFX_" }),
   ],
   build: {

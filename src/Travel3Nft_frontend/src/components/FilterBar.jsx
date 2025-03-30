@@ -1,5 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { useNotification } from '../context/NotificationContext';
+import React, { useMemo, useCallback } from 'react';
+// Import helpers correctly - two alternative approaches
+// Option 1: Import specific functions
+import { debounce } from '../utils/helpers';
 
 const FilterBar = ({
   searchTerm,
@@ -10,99 +12,144 @@ const FilterBar = ({
   setFilterLocation,
   places
 }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const { showInfo } = useNotification();
- 
-  // Extract unique locations from places data
-  const locations = useMemo(() => {
+  // Extract unique locations from NFTs for the dropdown
+  const uniqueLocations = useMemo(() => {
     if (!places || places.length === 0) return [];
-    const locationSet = new Set(places.map(place => place.metadata?.attributes?.location).filter(Boolean));
-    return Array.from(locationSet).sort();
+    
+    const locationsSet = new Set();
+    
+    places.forEach(place => {
+      if (place.metadata?.attributes?.location) {
+        locationsSet.add(place.metadata.attributes.location);
+      }
+    });
+    
+    return Array.from(locationsSet).sort();
   }, [places]);
- 
-  const handleSearchChange = (event) => {
-    setSearchTerm(event.target.value);
+
+  // Create debounced search handler to prevent too many re-renders
+  // Fallback implementation in case the helper isn't available
+  const createDebounceFn = (fn, delay) => {
+    let timeout;
+    return (...args) => {
+      clearTimeout(timeout);
+      timeout = setTimeout(() => fn(...args), delay);
+    };
   };
   
-  const handleSortChange = (event) => {
-    setSortOption(event.target.value);
-  };
-  
-  const handleLocationChange = (event) => {
-    setFilterLocation(event.target.value);
-  };
-  
-  const clearFilters = () => {
-    setSearchTerm('');
-    setSortOption('name-asc');
-    setFilterLocation('');
-    showInfo('Filters cleared');
-  };
- 
-  const toggleFilters = () => {
-    setIsExpanded(!isExpanded);
-  };
-  
+  // Create debounced search handler to prevent too many re-renders
+  const handleSearchChange = useCallback(
+    createDebounceFn((e) => setSearchTerm(e.target.value), 300),
+    [setSearchTerm]
+  );
+
   return (
-    <div className={`filter-bar ${isExpanded ? 'expanded' : ''}`}>
-      <div className="filter-row">
-        <div className="search-container">
-          <input
-            type="text"
-            placeholder="Search historical places..."
-            value={searchTerm}
-            onChange={handleSearchChange}
-            className="search-input"
-          />
-          {searchTerm && (
-            <button className="clear-search" onClick={() => setSearchTerm('')}>
-              ×
-            </button>
-          )}
+    <div className="card mb-4">
+      <div className="card-body">
+        <div className="row g-3">
+          {/* Search input */}
+          <div className="col-md-4">
+            <label htmlFor="search" className="form-label">Search</label>
+            <div className="input-group">
+              <span className="input-group-text">
+                <i className="bi bi-search"></i>
+              </span>
+              <input
+                type="text"
+                className="form-control"
+                id="search"
+                placeholder="Search by name or location..."
+                defaultValue={searchTerm}
+                onChange={handleSearchChange}
+              />
+              {searchTerm && (
+                <button
+                  className="btn btn-outline-secondary"
+                  type="button"
+                  onClick={() => setSearchTerm('')}
+                >
+                  <i className="bi bi-x"></i>
+                </button>
+              )}
+            </div>
+          </div>
+          
+          {/* Location filter dropdown */}
+          <div className="col-md-4">
+            <label htmlFor="location" className="form-label">Location</label>
+            <select
+              className="form-select"
+              id="location"
+              value={filterLocation}
+              onChange={(e) => setFilterLocation(e.target.value)}
+            >
+              <option value="">All Locations</option>
+              {uniqueLocations.map(location => (
+                <option key={location} value={location}>
+                  {location}
+                </option>
+              ))}
+            </select>
+          </div>
+          
+          {/* Sort options dropdown */}
+          <div className="col-md-4">
+            <label htmlFor="sort" className="form-label">Sort By</label>
+            <select
+              className="form-select"
+              id="sort"
+              value={sortOption}
+              onChange={(e) => setSortOption(e.target.value)}
+            >
+              <option value="name-asc">Name (A-Z)</option>
+              <option value="name-desc">Name (Z-A)</option>
+              <option value="year-asc">Year (Oldest First)</option>
+              <option value="year-desc">Year (Newest First)</option>
+            </select>
+          </div>
         </div>
-       
-        <div className="filter-actions">
-          <button
-            className="filter-toggle"
-            onClick={toggleFilters}
-          >
-            Filters {isExpanded ? '▲' : '▼'}
-          </button>
-         
-          <select
-            value={sortOption}
-            onChange={handleSortChange}
-            className="sort-select"
-          >
-            <option value="name-asc">Name (A-Z)</option>
-            <option value="name-desc">Name (Z-A)</option>
-            <option value="year-asc">Year (Oldest first)</option>
-            <option value="year-desc">Year (Newest first)</option>
-          </select>
-        </div>
-      </div>
-     
-      <div className={`expanded-filters ${isExpanded ? 'visible' : ''}`}>
-        <div className="filter-group">
-          <label>Location</label>
-          <select
-            value={filterLocation}
-            onChange={handleLocationChange}
-            className="location-select"
-          >
-            <option value="">All Locations</option>
-            {locations.map((location) => (
-              <option key={location} value={location} title={location}>
-                {location}
-              </option>
-            ))}
-          </select>
-        </div>
-       
-        {(searchTerm || filterLocation || sortOption !== 'name-asc') && (
-          <button className="clear-filters" onClick={clearFilters}>
-            Clear All Filters
-          </button>
+        
+        {/* Active filters display */}
+        {(searchTerm || filterLocation) && (
+          <div className="mt-3">
+            <small className="text-muted">Active filters:</small>
+            <div className="d-flex flex-wrap gap-2 mt-1">
+              {searchTerm && (
+                <span className="badge bg-light text-dark">
+                  Search: {searchTerm}
+                  <button
+                    type="button"
+                    className="btn-close ms-2"
+                    style={{ fontSize: '0.5rem' }}
+                    onClick={() => setSearchTerm('')}
+                  ></button>
+                </span>
+              )}
+              
+              {filterLocation && (
+                <span className="badge bg-light text-dark">
+                  Location: {filterLocation}
+                  <button
+                    type="button"
+                    className="btn-close ms-2"
+                    style={{ fontSize: '0.5rem' }}
+                    onClick={() => setFilterLocation('')}
+                  ></button>
+                </span>
+              )}
+              
+              <button
+                type="button"
+                className="btn btn-sm btn-outline-secondary"
+                onClick={() => {
+                  setSearchTerm('');
+                  setFilterLocation('');
+                }}
+              >
+                Clear All
+              </button>
+            </div>
+          </div>
         )}
       </div>
     </div>

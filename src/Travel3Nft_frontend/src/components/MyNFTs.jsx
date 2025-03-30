@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import nftService from '../services/nftService';
@@ -7,12 +7,18 @@ import FilterBar from './FilterBar';
 import LoadingPlaceholder from './LoadingPlaceholder';
 
 const MyNFTs = () => {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, principal } = useAuth();
   const navigate = useNavigate();
   const [nfts, setNfts] = useState([]);
   const [filteredNfts, setFilteredNfts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [filter, setFilter] = useState('all');
+
+  // Debug output
+  useEffect(() => {
+    console.log("MyNFTs auth state:", { isAuthenticated, isLoading, principal: principal?.toString() });
+  }, [isAuthenticated, isLoading, principal]);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -20,35 +26,47 @@ const MyNFTs = () => {
     }
   }, [isAuthenticated, isLoading, navigate]);
 
-  useEffect(() => {
-    // This will be replaced with actual NFT fetching logic
-    const fetchNFTs = async () => {
-      try {
-        // Replace with actual NFT service call
+  const fetchUserNFTs = useCallback(async () => {
+    if (!isAuthenticated) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      console.log("Fetching user NFTs...");
+      const userNFTs = await nftService.getUserNFTs();
+      console.log("Received user NFTs:", userNFTs);
+
+      if (userNFTs && userNFTs.length > 0) {
         setNfts(userNFTs);
         setFilteredNfts(userNFTs);
-      } catch (error) {
-        console.error('Error fetching NFTs:', error);
-      } finally {
-        setLoading(false);
+      } else {
+        console.log("No NFTs found for user");
+        setNfts([]);
+        setFilteredNfts([]);
       }
-    };
-
-    // Mock data for development until backend is ready
-    const mockNFTs = [
-      { id: '1001', tokenId: '1001', metadata: { attributes: { category: 'monument', area: 1.5 } } },
-      { id: '1002', tokenId: '1002', metadata: { attributes: { category: 'landmark', area: 2.3 } } },
-      { id: '1003', tokenId: '1003', metadata: { attributes: { category: 'museum', area: 1.8 } } },
-      { id: '1004', tokenId: '1004', metadata: { attributes: { category: 'monument', area: 3.2 } } }
-    ];
-    
-    // Use mock data for now, replace with fetchNFTs() when backend is ready
-    setNfts(mockNFTs);
-    setFilteredNfts(mockNFTs);
-    setLoading(false);
-  }, []);
+    } catch (err) {
+      console.error("Error fetching NFTs:", err);
+      setError("Failed to load your NFTs. Please try again later.");
+    } finally {
+      setLoading(false);
+    }
+  }, [isAuthenticated]);
 
   useEffect(() => {
+    // Only fetch NFTs if user is authenticated and not in loading state
+    if (!isLoading && isAuthenticated) {
+      fetchUserNFTs();
+    }
+  }, [isLoading, isAuthenticated, fetchUserNFTs]);
+
+  useEffect(() => {
+    // Apply filters when nfts or filter changes
+    if (!nfts || nfts.length === 0) {
+      setFilteredNfts([]);
+      return;
+    }
+
     if (filter === 'all') {
       setFilteredNfts(nfts);
     } else {
@@ -57,8 +75,8 @@ const MyNFTs = () => {
   }, [filter, nfts]);
 
   const handleToggleHighlight = (id) => {
-    setNfts(prevNfts => 
-      prevNfts.map(nft => 
+    setNfts((prevNfts) =>
+      prevNfts.map((nft) =>
         nft.id === id ? { ...nft, highlighted: !nft.highlighted } : nft
       )
     );
@@ -75,11 +93,19 @@ const MyNFTs = () => {
           <h1>My NFT Collection</h1>
           <FilterBar filter={filter} setFilter={setFilter} />
           {loading ? (
-            <LoadingPlaceholder />
+            <LoadingPlaceholder message="Loading your NFT collection..." />
+          ) : error ? (
+            <div className="error-message">{error}</div>
+          ) : filteredNfts.length === 0 ? (
+            <div className="empty-collection">
+              <p>You don't have any NFTs in your collection yet.</p>
+              <button onClick={() => navigate('/mint')}>Mint Your First NFT</button>
+            </div>
           ) : (
             <div className="nft-grid">
-              {filteredNfts.map((nft) => (
-                <NFTCard key={nft.id || nft.tokenId} nft={nft} onToggleHighlight={handleToggleHighlight} />
+              {filteredNfts.map((nft, index) => (
+                <NFTCard key={nft.id || nft.tokenId || index} 
+                  nft={nft} onToggleHighlight={handleToggleHighlight} />
               ))}
             </div>
           )}

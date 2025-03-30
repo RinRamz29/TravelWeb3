@@ -1,108 +1,160 @@
-import { AuthClient, HttpAgent } from "./dfinity-imports";
+// authService.js
+import { AuthClient } from "@dfinity/auth-client";
+import { Principal } from "@dfinity/principal";
 
-// Get the Internet Identity canister ID from environment variables or use the default local one
-let LOCAL_II_CANISTER;
-try {
-  LOCAL_II_CANISTER = process.env.CANISTER_ID_INTERNET_IDENTITY || "bkyz2-fmaaa-aaaaa-qaaaq-cai";
-} catch (e) {
-  LOCAL_II_CANISTER = "bkyz2-fmaaa-aaaaa-qaaaq-cai";
-}
-
-// Configuration for auth client
-const AUTH_IDLE_TIMEOUT = 1000 * 60 * 30; // 30 minutes
-const AUTH_HOST = process.env.NODE_ENV !== "production" ? "http://localhost:8000" : undefined;
+// Create a singleton instance variable but don't initialize it yet
+let instance = null;
 
 class AuthService {
   constructor() {
     this.authClient = null;
     this.identity = null;
-    this.agent = null;
-    this.isAuthenticated = false;
     this.principal = null;
+    this.isAuthenticated = false;
+    this.initialized = false;
   }
 
   async initialize() {
-    this.authClient = await AuthClient.create({
-      idleOptions: { idleTimeout: AUTH_IDLE_TIMEOUT },
-      host: AUTH_HOST
-    });
-    this.isAuthenticated = await this.authClient.isAuthenticated();
+    if (this.initialized) return true;
     
-    if (this.isAuthenticated) {
-      this.identity = this.authClient.getIdentity();
-      this.principal = this.identity.getPrincipal();
-      this.agent = new HttpAgent({ identity: this.identity });
+    try {
+      console.log("Initializing AuthService...");
+      this.authClient = await AuthClient.create();
       
-      // When in development, we need to fetch the root key
-      if (process.env.NODE_ENV !== "production") {
-        this.agent.fetchRootKey();
+      // Check if the user is already authenticated
+      const isAuthenticated = await this.authClient.isAuthenticated();
+      this.isAuthenticated = isAuthenticated;
+      
+      if (isAuthenticated) {
+        this.identity = this.authClient.getIdentity();
+        this.principal = this.identity.getPrincipal();
+        console.log("User is already authenticated with principal:", this.principal.toString());
+      } else {
+        console.log("User is not authenticated");
       }
+      
+      this.initialized = true;
+      return true;
+    } catch (error) {
+      console.error("Error initializing auth service:", error);
+      throw error;
     }
-    
-    return this.isAuthenticated;
   }
 
-  getIdentityProviderUrl() {
-    if (process.env.NODE_ENV === "production") {
-      return "https://identity.ic0.app";
-    } else {
-      // For local development
-      return `http://${LOCAL_II_CANISTER}.localhost:8000`;
+  async isLoggedIn() {
+    if (!this.authClient) {
+      await this.initialize();
+    }
+    
+    try {
+      const isAuthenticated = await this.authClient.isAuthenticated();
+      this.isAuthenticated = isAuthenticated;
+      return isAuthenticated;
+    } catch (error) {
+      console.error("Error checking authentication status:", error);
+      return false;
     }
   }
 
   async login() {
-    return new Promise((resolve) => {
-      const identityProvider = this.getIdentityProviderUrl();
-      console.log("Using identity provider:", identityProvider);
-      
-      this.authClient.login({
-        identityProvider,
-        onSuccess: () => {
-          this.isAuthenticated = true;
-          this.identity = this.authClient.getIdentity();
-          this.principal = this.identity.getPrincipal();
-          this.agent = new HttpAgent({ identity: this.identity });
-          
-          if (process.env.NODE_ENV !== "production") {
-            this.agent.fetchRootKey();
+    if (!this.authClient) {
+      await this.initialize();
+    }
+    
+    try {
+      return new Promise((resolve) => {
+        this.authClient.login({
+          identityProvider: process.env.II_URL || "https://identity.ic0.app",
+          onSuccess: async () => {
+            this.identity = this.authClient.getIdentity();
+            this.principal = this.identity.getPrincipal();
+            this.isAuthenticated = true;
+            console.log("Login successful. Principal:", this.principal.toString());
+            resolve(true);
+          },
+          onError: (error) => {
+            console.error("Login error:", error);
+            resolve(false);
           }
-          
-          resolve(true);
-        },
-        onError: (error) => {
-          console.error("Login failed:", error);
-          resolve(false);
-        }
+        });
       });
-    });
+    } catch (error) {
+      console.error("Error during login:", error);
+      return false;
+    }
   }
 
   async logout() {
-    await this.authClient.logout();
-    this.isAuthenticated = false;
-    this.identity = null;
-    this.principal = null;
-    this.agent = null;
+    if (!this.authClient) {
+      await this.initialize();
+    }
     
-    // Reload the page to reset the application state
-    window.location.reload();
+    try {
+      await this.authClient.logout();
+      this.identity = null;
+      this.principal = null;
+      this.isAuthenticated = false;
+      console.log("Logout successful");
+      
+      // Reload the page to reset the application state
+      window.location.reload();
+      return true;
+    } catch (error) {
+      console.error("Error during logout:", error);
+      return false;
+    }
   }
 
-  getPrincipal() {
+  // Method for getting the identity (used by NFTService)
+  async getIdentity() {
+    if (!this.authClient) {
+      await this.initialize();
+    }
+    
+    if (await this.isLoggedIn()) {
+      this.identity = this.authClient.getIdentity();
+      return this.identity;
+    }
+    
+    return null;
+  }
+  
+  // Alternative method name for backward compatibility
+  async getLoggedInIdentity() {
+    return this.getIdentity();
+  }
+  
+  // Method for getting the principal directly
+  async getPrincipal() {
+    if (!this.identity) {
+      const identity = await this.getIdentity();
+      if (!identity) return null;
+    }
+    
+    this.principal = this.identity.getPrincipal();
     return this.principal;
   }
 
-  getIdentity() {
-    return this.identity;
-  }
-
-  getAgent() {
-    return this.agent;
+  // Synchronous method to get the current principal (used by NFTService)
+  getLoggedInPrincipal() {
+    if (this.identity) {
+      return this.identity.getPrincipal();
+    }
+    return null;
   }
 }
 
-// Create a singleton instance
-const authService = new AuthService();
+// Create the singleton instance only once
+const getInstance = () => {
+  if (!instance) {
+    instance = new AuthService();
+  }
+  return instance;
+};
 
+// Create a pre-initialized singleton instance
+const authService = getInstance();
+
+// Export the instance as default and as a named export
 export default authService;
+export { authService };
