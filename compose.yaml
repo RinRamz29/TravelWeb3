@@ -8,7 +8,7 @@ services:
       - "8000:8000"  # IC replica API
       - "8080:8080"  # Frontend canister
     volumes:
-      - .:/home/ic-user/app
+      - .:/home/ic-user/project
       - dfx-cache:/home/ic-user/.cache/dfx
       - identity:/home/ic-user/.config/dfx/identity
     command: dfx-start
@@ -21,11 +21,13 @@ services:
     depends_on:
       - ic-replica
     volumes:
-      - .:/home/ic-user/app
+      - .:/home/ic-user/project
       - dfx-cache:/home/ic-user/.cache/dfx
       - identity:/home/ic-user/.config/dfx/identity
+    # We don't need to mount mint_nfts.py since it's embedded in the entrypoint
     command: mint
-    # This service will exit after minting is complete
+    environment:
+      - DFX_NETWORK_HOST=ic-replica
 
   # Shell for interactive work with dfx tools
   dfx-shell:
@@ -33,12 +35,14 @@ services:
       context: .
       dockerfile: Dockerfile
     volumes:
-      - .:/home/ic-user/app
+      - .:/home/ic-user/project
       - dfx-cache:/home/ic-user/.cache/dfx
       - identity:/home/ic-user/.config/dfx/identity
     command: bash
     stdin_open: true
     tty: true
+    environment:
+      - DFX_NETWORK_HOST=ic-replica
 
 volumes:
   dfx-cache:

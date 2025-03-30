@@ -1,162 +1,285 @@
-# Travel3 NFT Docker Setup Guide
+# Travel3 NFT Project
 
-This guide explains how to set up and run your Internet Computer NFT minting project using Docker containers. This approach resolves permission issues on WSL and provides a consistent environment for development.
+A Dockerized NFT minting application for the Internet Computer blockchain. This project allows you to mint historical place NFTs with location metadata, images, and documents.
+
+## Overview
+
+This project demonstrates how to:
+- Set up a local Internet Computer environment using Docker
+- Mint NFTs with rich metadata including images and documents
+- Handle the complexities of the Candid interface format correctly
+- Solve common issues with WSL permissions and local development
 
 ## Prerequisites
 
-- Docker: [Install Docker](https://docs.docker.com/get-docker/)
-- Docker Compose: [Install Docker Compose](https://docs.docker.com/compose/install/)
+- [Docker](https://docs.docker.com/get-docker/)
+- [Docker Compose](https://docs.docker.com/compose/install/)
 
-## Project Files
+No need to install dfx, Node.js, or any Internet Computer tools locally - they're all included in the Docker image.
 
-Ensure you have the following files in your project directory:
+## Setup Instructions
 
-1. `Dockerfile`: Defines the container environment
-2. `docker-entrypoint.sh`: Script for container startup 
-3. `mint_nfts.py`: Python script for NFT minting
-4. `docker-compose.yml`: Defines the multi-container setup
-5. Your Motoko code files (main.mo, types.mo, etc.)
-6. Your project configuration (dfx.json)
+### 1. Create Required Files
 
-## Project Structure
+Create the following files in your project directory:
 
-Your directory should look like this:
+#### `Dockerfile`
+```dockerfile
+FROM ubuntu:22.04
+
+# Install essential packages
+RUN apt-get update && apt-get install -y \
+    curl \
+    wget \
+    git \
+    gnupg \
+    build-essential \
+    python3 \
+    python3-pip \
+    cmake \
+    unzip \
+    pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Node.js (required for dfx)
+RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Rust (required for some IC apps)
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+# Install DFINITY SDK (dfx) - using non-interactive approach
+RUN wget -q -O dfx-install.sh https://internetcomputer.org/install.sh \
+    && DFX_NON_INTERACTIVE=true bash dfx-install.sh \
+    && rm dfx-install.sh
+
+# Create a non-root user for running dfx
+RUN useradd -m -s /bin/bash ic-user
+USER ic-user
+WORKDIR /home/ic-user
+
+# Expose DFX ports
+EXPOSE 8000 8080
+
+# Entry point script
+COPY --chown=ic-user:ic-user docker-entrypoint.sh /home/ic-user/
+RUN chmod +x /home/ic-user/docker-entrypoint.sh
+
+# Set the default command
+ENTRYPOINT ["/home/ic-user/docker-entrypoint.sh"]
+```
+
+#### `docker-compose.yml`
+```yaml
+version: '3.8'
+
+services:
+  ic-replica:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: travel3-ic-replica
+    ports:
+      - "8000:8000"  # IC replica API
+      - "8080:8080"  # Frontend canister
+    volumes:
+      - .:/home/ic-user/project
+      - dfx-cache:/home/ic-user/.cache/dfx
+      - identity:/home/ic-user/.config/dfx/identity
+    command: dfx-start
+    restart: unless-stopped
+
+  mint-nfts:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      - ic-replica
+    volumes:
+      - .:/home/ic-user/project
+      - dfx-cache:/home/ic-user/.cache/dfx
+      - identity:/home/ic-user/.config/dfx/identity
+    command: mint
+    environment:
+      - DFX_NETWORK_HOST=ic-replica
+
+  dfx-shell:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - .:/home/ic-user/project
+      - dfx-cache:/home/ic-user/.cache/dfx
+      - identity:/home/ic-user/.config/dfx/identity
+    command: bash
+    stdin_open: true
+    tty: true
+    environment:
+      - DFX_NETWORK_HOST=ic-replica
+
+volumes:
+  dfx-cache:
+  identity:
+```
+
+#### `docker-entrypoint.sh`
+Save the content of the enhanced docker-entrypoint.sh that contains the embedded minting script.
+
+#### `dfx.json`
+```json
+{
+  "canisters": {
+    "Travel3Nft_backend": {
+      "main": "src/Travel3Nft_backend/main.mo",
+      "type": "motoko"
+    },
+    "Travel3Nft_frontend": {
+      "dependencies": [
+        "Travel3Nft_backend"
+      ],
+      "frontend": {
+        "entrypoint": "src/Travel3Nft_frontend/src/index.html"
+      },
+      "source": [
+        "src/Travel3Nft_frontend/assets",
+        "dist/Travel3Nft_frontend/"
+      ],
+      "type": "assets"
+    }
+  },
+  "defaults": {
+    "build": {
+      "args": "",
+      "packtool": ""
+    }
+  },
+  "version": 1
+}
+```
+
+### 2. Create Project Structure
+
+Ensure you have the Motoko source files in the correct locations:
 
 ```
-travel3Motoko/
+your-project/
 ├── Dockerfile
 ├── docker-compose.yml
 ├── docker-entrypoint.sh
-├── mint_nfts.py
 ├── dfx.json
-├── src/
-│   ├── Travel3Nft_backend/
-│   │   ├── main.mo
-│   │   └── types.mo
-│   └── Travel3Nft_frontend/
-│       └── ...
-└── README.md
+└── src/
+    ├── Travel3Nft_backend/
+    │   ├── main.mo
+    │   └── types.mo
+    └── Travel3Nft_frontend/
+        └── src/
+            └── index.html
 ```
 
-## Setting Up
+### 3. Build and Run the Docker Environment
 
-1. Make sure all the files are in the correct location
-2. Make the entrypoint script executable:
-
+First, make the entrypoint script executable:
 ```bash
 chmod +x docker-entrypoint.sh
 ```
 
-## Running the Docker Environment
-
-### Starting the IC Replica
-
-Start the IC replica in a container:
-
+Then build and start the services:
 ```bash
+# Build the Docker images
+docker-compose build
+
+# Start the IC replica in the background
 docker-compose up ic-replica -d
-```
 
-This will:
-- Build the Docker image
-- Start the IC replica in the background
-- Make it accessible on port 8000
+# Wait a moment for the replica to start
+sleep 10
 
-### Minting NFTs
-
-Once the replica is running, you can mint your NFTs:
-
-```bash
+# Run the NFT minting process
 docker-compose up mint-nfts
 ```
 
-This will:
-- Connect to the running replica
-- Run the minting script
-- Exit when complete
+## Using the Environment
 
-### Working with the Shell
+### Minting NFTs
 
-For interactive work with the dfx tools:
+The minting process will automatically:
+1. Start a local Internet Computer replica
+2. Build the canisters
+3. Mint three historical place NFTs with metadata
+4. Set image and document locations for each NFT
 
+### Working with the dfx Shell
+
+For interactive work with dfx:
 ```bash
 docker-compose run dfx-shell
 ```
 
-This gives you a bash shell inside the container with all the tools installed.
+This gives you access to all dfx commands in a properly configured environment.
 
-## Common Tasks
+### Viewing the Frontend
 
-### View Container Logs
-
-```bash
-docker-compose logs ic-replica
+Once deployed, you can access your frontend at:
 ```
-
-### Stopping All Containers
-
-```bash
-docker-compose down
+http://localhost:8080
 ```
-
-### Full Reset
-
-To completely restart with a clean state:
-
-```bash
-docker-compose down -v
-docker-compose up ic-replica -d
-```
-
-The `-v` flag removes the associated volumes, ensuring a fresh start.
 
 ## Troubleshooting
 
-### Replica Not Starting
+### Container Logs
 
-If the replica isn't starting properly, check the logs:
-
+View logs for a specific service:
 ```bash
 docker-compose logs ic-replica
+docker-compose logs mint-nfts
 ```
 
-### Permission Issues
+### Restarting Services
 
-If you encounter any permission issues with the files:
-
+If you need to restart:
 ```bash
-sudo chown -R $(id -u):$(id -g) .
+docker-compose down
+docker-compose up ic-replica -d
 ```
 
-### Network Connectivity
+### Complete Reset
 
-If containers can't communicate:
-
+To start completely fresh:
 ```bash
-docker network inspect travel3motoko_default
+docker-compose down -v
+docker-compose build --no-cache
+docker-compose up ic-replica -d
 ```
 
-## Additional Configuration
+### Container Networking
 
-### Modifying DFX Version
-
-To use a specific version of dfx, edit the Dockerfile:
-
-```dockerfile
-RUN DFX_VERSION=0.15.0 sh -ci "$(curl -fsSL https://internetcomputer.org/install.sh)"
+If services can't communicate:
+```bash
+docker-compose run dfx-shell
+ping ic-replica  # Should respond if networking is working
 ```
 
-### Persistent Identity
+## Developing Your Project
 
-Your dfx identity is stored in a volume, so it persists between container restarts.
+### Making Changes to Motoko Code
 
-## Deploying to Mainnet
+1. Edit your Motoko files in the `src/` directory
+2. Use the dfx-shell to rebuild and deploy:
+   ```bash
+   docker-compose run dfx-shell
+   dfx deploy
+   ```
 
-To deploy to the IC mainnet, you can use the dfx-shell:
+### Deploying to Mainnet
 
+From the dfx-shell:
 ```bash
 docker-compose run dfx-shell
 dfx deploy --network ic
 ```
 
-Remember to configure your mainnet credentials first.
+## License
+
+This project is licensed under the Apache License 2.0.
