@@ -15,7 +15,6 @@ const Header = () => {
         setScrolled(isScrolled);
       }
     };
-
     document.addEventListener('scroll', handleScroll);
     return () => {
       document.removeEventListener('scroll', handleScroll);
@@ -40,30 +39,39 @@ const Header = () => {
 
   return (
     <header className={`app-header ${scrolled ? 'scrolled' : ''}`}>
-      <div className="container">
-        <div className="header-content">
-          <div className="logo">
-            <img src="/logo2.svg" alt="Travel3 Logo" />
-            <span>Travel3</span>
-          </div>
-          <nav className="main-nav">
-            <ul>
-              <li><a href="#" className="active">Collection</a></li>
-              <li><a href="#">About</a></li>
-              <li><a href="#">FAQ</a></li>
-            </ul>
-          </nav>
-          <div className="header-actions">
-            <button 
-              className={`connect-wallet-btn ${isAuthenticated ? 'connected' : ''}`}
-              onClick={handleConnectWallet}
-              disabled={isLoading}
-            >
-              {isLoading ? 'Loading...' : isAuthenticated 
-                ? `Connected: ${formatPrincipal(principal?.toString())}` 
-                : 'Connect Wallet'}
-            </button>
-          </div>
+      <div className="header-bottom">
+        {/* Logo section */}
+        <div className="logo-container">
+          <svg width="40" height="40" viewBox="0 0 100 100">
+            <ellipse 
+              cx="50" cy="50" rx="30" ry="20" 
+              fill="none" 
+              stroke="#d53f8c" 
+              strokeWidth="2" 
+              transform="rotate(45 50 50)" 
+            />
+            <ellipse 
+              cx="50" cy="50" rx="30" ry="20" 
+              fill="none" 
+              stroke="#d53f8c" 
+              strokeWidth="2" 
+              transform="rotate(-45 50 50)" 
+            />
+          </svg>
+          <span>Travel3</span>
+        </div>
+        
+        {/* Wallet connection button */}
+        <div className="header-actions">
+          <button
+            className={`connect-wallet-btn ${isAuthenticated ? 'connected' : ''}`}
+            onClick={handleConnectWallet}
+            disabled={isLoading}
+          >
+            {isLoading ? 'Loading...' : isAuthenticated
+              ? `Connected: ${formatPrincipal(principal?.toString())}`
+              : 'Connect Wallet'}
+          </button>
         </div>
       </div>
     </header>

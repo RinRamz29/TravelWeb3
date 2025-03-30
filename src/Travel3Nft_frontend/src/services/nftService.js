@@ -1,5 +1,6 @@
 import { Travel3Nft_backend } from '../../../declarations/Travel3Nft_backend';
 import authService from './authService';
+import { Principal } from '@dfinity/principal';
 
 class NftService {
   async getAllTokens() {
@@ -43,15 +44,12 @@ class NftService {
     }
   }
 
-  // This would be implemented when the backend supports it
   async transferToken(tokenId, to) {
     if (!authService.isAuthenticated) {
       throw new Error('User is not authenticated');
     }
 
     try {
-      // This is a placeholder for when the backend implements token transfer
-      // return await Travel3Nft_backend.transferToken(tokenId, to);
       throw new Error('Transfer functionality not yet implemented');
     } catch (error) {
       console.error(`Error transferring token #${tokenId}:`, error);
@@ -59,18 +57,53 @@ class NftService {
     }
   }
 
-  // This would be implemented when the backend supports it
   async makeOffer(tokenId, price) {
     if (!authService.isAuthenticated) {
       throw new Error('User is not authenticated');
     }
 
     try {
-      // This is a placeholder for when the backend implements marketplace functionality
-      // return await Travel3Nft_backend.makeOffer(tokenId, price);
       throw new Error('Marketplace functionality not yet implemented');
     } catch (error) {
       console.error(`Error making offer for token #${tokenId}:`, error);
+      throw error;
+    }
+  }
+
+  async setImageLocation(tokenId, location) {
+    try {
+      return await Travel3Nft_backend.setImageLocation(tokenId, location);
+    } catch (error) {
+      console.error(`Error setting image location for token #${tokenId}:`, error);
+      throw error;
+    }
+  }
+
+  async setDocumentLocation(tokenId, location) {
+    try {
+      return await Travel3Nft_backend.setDocumentLocation(tokenId, location);
+    } catch (error) {
+      console.error(`Error setting document location for token #${tokenId}:`, error);
+      throw error;
+    }
+  }
+
+  async mintNFT(metadata) {
+    if (!authService.isAuthenticated) {
+      throw new Error('User is not authenticated');
+    }
+
+    try {
+      const principal = authService.getPrincipal();
+      const result = await Travel3Nft_backend.mint(Principal.fromText(principal), metadata);
+      if ('Ok' in result) {
+        const [tokenId, txId] = result.Ok;
+        return { tokenId, txId };
+      } else {
+        throw new Error(result.Err);
+      }
+    } catch (error) {
+      console.error('Error minting NFT:', error);
       throw error;
     }
   }

@@ -296,24 +296,35 @@ shared (msg) actor class NFToken(
     };
 
     //@Travel3: add custodian can mint and adjust token metadata
-    public shared (msg) func mint(to : Principal, metadata : ?TokenMetadata) : async MintResult {
+    public shared (msg) func mint(to : Principal, metadata : Types.TokenMetadata) : async MintResult {
         if (not _isCustodian(msg.caller)) {
             return #Err(#Unauthorized);
         };
 
+        let tokenId = totalSupply_;
         let token : TokenInfo = {
-            index = totalSupply_;
+            index = tokenId;
             var owner = to;
-            var metadata = metadata;
+            var metadata = ?metadata;
             var operator = null;
             timestamp = Time.now();
         };
 
-        tokens.put(totalSupply_, token);
-        _addTokenTo(to, totalSupply_);
+        tokens.put(tokenId, token);
+        _addTokenTo(to, tokenId);
         totalSupply_ += 1;
-        let txid = addTxRecord(msg.caller, #mint(metadata), ?token.index, #user(blackhole), #user(to), Time.now());
-        return #Ok((token.index, txid));
+        let txid = addTxRecord(msg.caller, #mint(?metadata), ?token.index, #user(blackhole), #user(to), Time.now());
+
+        // Set image and document locations
+        ignore setImageLocation(tokenId, metadata.mainImageLocation);
+        ignore setDocumentLocation(tokenId, metadata.documentLocation);
+
+        // Add any additional metadata processing here if needed
+        if (metadata.additionalImagesLocation.size() > 0) {
+            // Process additional images if needed
+        };
+
+        return #Ok((tokenId, txid));
     };
 
     public shared (msg) func burn(tokenId : Nat) : async TxReceipt {
@@ -336,7 +347,7 @@ shared (msg) actor class NFToken(
         if (_exists(tokenId) == false) {
             return #Err(#TokenNotExist);
         };
-        let token = _unwrap(tokens.get(tokenId));
+        var token = _unwrap(tokens.get(tokenId));
         let old_metadate = token.metadata;
         token.metadata := ?new_metadata;
         tokens.put(tokenId, token);
@@ -995,6 +1006,30 @@ shared (msg) actor class NFToken(
 
     public query func getTranscationFee() : async Nat {
         return transcationFee_;
+    };
+
+    public shared (msg) func setImageLocation(tokenId : Nat, location : ImageLocation) : async TxReceipt {
+        if (not _isCustodian(msg.caller)) {
+            return #Err(#Unauthorized);
+        };
+        if (_exists(tokenId) == false) {
+            return #Err(#TokenNotExist);
+        };
+        imageLocations.put(tokenId, location);
+        let txid = addPlaceSetupRecord(msg.caller, #setImageLocation, ?tokenId, #user(msg.caller), #metadata(?{ tokenIdentifier = ""; mainImageType = ""; mainImageLocation = location; additionalImagesType = ""; additionalImagesLocation = []; documentType = ""; documentLocation = { icp = ""; ipfs = "" }; thumbnailType = ""; thumbnailLocation = { icp = ""; ipfs = "" }; attributes = { name = ""; location = ""; coordinates = ""; collection = ""; year = ""; category = ""; historicalPeriod = ""; culturalSignificance = ""; architecturalStyle = null } }), Time.now());
+        return #Ok(txid);
+    };
+
+    public shared (msg) func setDocumentLocation(tokenId : Nat, location : DocumentLocation) : async TxReceipt {
+        if (not _isCustodian(msg.caller)) {
+            return #Err(#Unauthorized);
+        };
+        if (_exists(tokenId) == false) {
+            return #Err(#TokenNotExist);
+        };
+        documentLocations.put(tokenId, location);
+        let txid = addPlaceSetupRecord(msg.caller, #setDocumentLocation, ?tokenId, #user(msg.caller), #metadata(?{ tokenIdentifier = ""; mainImageType = ""; mainImageLocation = { icp = ""; ipfs = "" }; additionalImagesType = ""; additionalImagesLocation = []; documentType = ""; documentLocation = location; thumbnailType = ""; thumbnailLocation = { icp = ""; ipfs = "" }; attributes = { name = ""; location = ""; coordinates = ""; collection = ""; year = ""; category = ""; historicalPeriod = ""; culturalSignificance = ""; architecturalStyle = null } }), Time.now());
+        return #Ok(txid);
     };
 
     system func preupgrade() {

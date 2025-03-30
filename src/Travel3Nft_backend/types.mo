@@ -132,9 +132,9 @@ module {
         #setStreamingRoyalty;
 
         #setImageLocation;
-        #retriveImageLocation;
-
         #setDocumentLocation;
+
+        #retriveImageLocation;
         #retriveDocumentLocation;
 
         #setDecryptionKey;

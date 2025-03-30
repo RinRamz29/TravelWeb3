@@ -33,7 +33,7 @@ export default defineConfig({
   server: {
     proxy: {
       "/api": {
-        target: "http://127.0.0.1:4943",
+        target: "http://localhost:8000",
         changeOrigin: true,
       },
     },
@@ -41,6 +41,7 @@ export default defineConfig({
   // Configure path aliases
   resolve: {
     alias: {
+      '@': resolve(__dirname, 'src'),
       '@dfinity/identity': resolve(__dirname, 'node_modules/@dfinity/identity'),
       declarations: resolve(__dirname, '../declarations'),
       buffer: 'buffer/',
@@ -53,6 +54,7 @@ export default defineConfig({
     react(),
     environment("all", { prefix: "CANISTER_" }),
     environment("all", { prefix: "DFX_" }),
+    environment({ VITE_DFX_NETWORK: 'local' }),
   ],
   build: {
     rollupOptions: {

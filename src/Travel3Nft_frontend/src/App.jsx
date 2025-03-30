@@ -1,11 +1,11 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import nftService from './services/nftService';
-import HistoricalPlaceCard from './components/HistoricalPlaceCard';
+import NFTCard from './components/NFTCard';
 import ErrorBoundary from './components/ErrorBoundary';
 import Header from './components/Header';
+import FilterBar from './components/FilterBar';
 import { useNotification } from './context/NotificationContext';
 import LoadingPlaceholder from './components/LoadingPlaceholder';
-import FilterBar from './components/FilterBar';
 
 function App() {
   const [places, setPlaces] = useState([]);
@@ -21,14 +21,19 @@ function App() {
     setLoading(true);
     nftService.getAllTokens()
       .then((tokens) => {
-        setPlaces(tokens);
-        setFilteredPlaces(tokens);
-        showSuccess(`Loaded ${tokens.length} historical places`);
+        if (tokens && tokens.length > 0) {
+          setPlaces(tokens);
+          setFilteredPlaces(tokens);
+          showSuccess(`Loaded ${tokens.length} historical places`);
+        } else {
+          showError('No historical places found or tokens are undefined');
+          setError('No historical places found');
+        }
         setLoading(false);
       })
       .catch((err) => {
-        showError('Failed to load NFTs: ' + err.message);
-        setError(err.message);
+        showError('Failed to load NFTs: ' + (err.message || 'Unknown error'));
+        setError(err.message || 'Failed to load NFTs');
         setLoading(false);
       });
   }, []);
@@ -72,13 +77,25 @@ function App() {
     });
   };
 
+  // Function to handle highlighting/selecting an NFT
+  const handleToggleHighlight = (id) => {
+    const updatedPlaces = places.map(place => 
+      place.id === id 
+        ? { ...place, highlighted: !place.highlighted } 
+        : place
+    );
+    setPlaces(updatedPlaces);
+    setFilteredPlaces(sortPlaces(updatedPlaces.filter(place => 
+      (!searchTerm || place.metadata?.attributes?.name?.toLowerCase().includes(searchTerm.toLowerCase())) &&
+      (!filterLocation || place.metadata?.attributes?.location?.toLowerCase().includes(filterLocation.toLowerCase()))
+    ), sortOption));
+  };
+
   return (
     <div className="app">
       <Header />
       <main>
         <div className="container">
-          {/* Test component to verify Identity import */}
-          
           <h1>Historical Places NFT Collection</h1>
           <FilterBar 
             searchTerm={searchTerm}
@@ -91,14 +108,18 @@ function App() {
           />
           {error && <div className="error-message">{error}</div>}
           <ErrorBoundary>
-            <div className="places-grid">
+            <div className="nft-grid">
               {loading ? (
-                Array(6).fill().map((_, index) => (
+                Array(24).fill().map((_, index) => (
                   <LoadingPlaceholder key={index} />
                 ))
               ) : filteredPlaces.length > 0 ? (
                 filteredPlaces.map((place) => (
-                  <HistoricalPlaceCard key={place.index} place={place} />
+                  <NFTCard 
+                    key={place.id || place.index} 
+                    nft={place} 
+                    onToggleHighlight={handleToggleHighlight} 
+                  />
                 ))
               ) : (
                 <div className="no-results">No historical places found matching your criteria</div>
