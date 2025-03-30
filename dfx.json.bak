@@ -1,0 +1,38 @@
+{
+  "canisters": {
+    "internet_identity": {
+      "type": "custom",
+      "candid": "https://github.com/dfinity/internet-identity/releases/latest/download/internet_identity.did",
+      "wasm": "https://github.com/dfinity/internet-identity/releases/latest/download/internet_identity_dev.wasm",
+      "remote": {
+        "id": {
+          "ic": "rdmx6-jaaaa-aaaaa-aaadq-cai"
+        }
+      }
+    },
+    "Travel3Nft_backend": {
+      "main": "src/Travel3Nft_backend/main.mo",
+      "type": "motoko"
+    },
+    "Travel3Nft_frontend": {
+      "dependencies": [
+        "Travel3Nft_backend"
+      ],
+      "source": [
+        "src/Travel3Nft_frontend/dist"
+      ],
+      "type": "assets",
+      "frontend": {
+        "entrypoint": "src/Travel3Nft_frontend/src/main.jsx"
+      }
+    }
+  },
+  "defaults": {
+    "build": {
+      "args": "",
+      "packtool": ""
+    }
+  },
+  "output_env_file": ".env",
+  "version": 1
+}

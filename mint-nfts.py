@@ -1,9 +1,7 @@
+#!/usr/bin/env python3
 import os
-import json
 import time
 import subprocess
-import signal
-import sys
 
 # Character definitions for escaping
 slach = chr(92)  # \
@@ -11,8 +9,21 @@ quote = chr(34)  # "
 quote_one = chr(39)  # '
 slach_quote = chr(92) + chr(34)  # \"
 
+# Use the full path to dfx binary
+DFX_PATH = "/usr/local/bin/dfx"
+DFX_NETWORK = "local"
+
 def run_command(command, check_output=False):
     """Run a shell command and optionally return its output"""
+    # Replace 'dfx' with the full path
+    if command.startswith("dfx "):
+        command = command.replace("dfx ", f"{DFX_PATH} ", 1)
+    
+    # Add network flag for relevant commands
+    if "canister" in command or "build" in command:
+        if "--network" not in command:
+            command = command + f" --network={DFX_NETWORK}"
+    
     print(f"Running command: {command}")
     
     if check_output:
@@ -24,76 +35,24 @@ def run_command(command, check_output=False):
             print(f"Output: {e.output}")
             return None
     else:
-        return os.system(command)
+        result = os.system(command)
+        return result == 0  # Returns True if command succeeded (exit code 0)
 
-def wait_for_network_ready(max_attempts=10, delay=5):
-    """Wait for the local network to be ready"""
-    for attempt in range(max_attempts):
-        print(f"Checking if network is ready (attempt {attempt+1}/{max_attempts})...")
-        result = run_command("dfx ping", check_output=True)
-        if result and "The replica is running" in result:
-            print("Local replica is running and ready!")
-            return True
-        print(f"Network not ready yet. Waiting {delay} seconds...")
-        time.sleep(delay)
-    
-    print("Failed to start local network after maximum attempts.")
-    return False
-
-# Clean up any existing processes
-print("Cleaning up environment...")
-run_command("killall dfx 2>/dev/null || true")
-run_command("rm -rf .dfx")
-
-# Start the local replica
-print("Starting local network...")
-dfx_process = subprocess.Popen(
-    "dfx start --clean",
-    shell=True,
-    stdout=subprocess.PIPE,
-    stderr=subprocess.STDOUT,
-    universal_newlines=True
-)
-
-# Register a signal handler to terminate the dfx process on script exit
-def cleanup(signum=None, frame=None):
-    if dfx_process:
-        print("Terminating dfx process...")
-        dfx_process.terminate()
-        try:
-            dfx_process.wait(timeout=5)  # Wait for process to terminate
-        except:
-            print("Failed to terminate dfx process cleanly")
-    
-    if signum is not None:  # Only exit if this was called as a signal handler
-        sys.exit(0)
-
-# Set up signal handlers
-signal.signal(signal.SIGINT, cleanup)
-signal.signal(signal.SIGTERM, cleanup)
-
-# Give the network time to start
-time.sleep(10)
-
-# Wait for the network to be ready
-if not wait_for_network_ready(max_attempts=15, delay=5):
-    print("Could not start the local replica. Exiting.")
-    cleanup()
-    sys.exit(1)
+# Skip network check and just proceed with canister creation
+print("Skipping replica connection check and proceeding directly...")
 
 # Create canisters
 print("Creating canisters...")
-run_command("dfx canister create Travel3Nft_frontend")
-run_command("dfx canister create Travel3Nft_backend")
-run_command("dfx build")
+run_command(f"{DFX_PATH} canister create Travel3Nft_frontend --network={DFX_NETWORK}")
+run_command(f"{DFX_PATH} canister create Travel3Nft_backend --network={DFX_NETWORK}")
+run_command(f"{DFX_PATH} build --network={DFX_NETWORK}")
 
 # Get principal ID
 print("Getting principal ID...")
-principal_id = run_command("dfx identity get-principal", check_output=True)
+principal_id = run_command(f"{DFX_PATH} identity get-principal", check_output=True)
 if not principal_id:
     print("Failed to get principal ID. Exiting.")
-    cleanup()
-    sys.exit(1)
+    exit(1)
 
 print(f"Principal ID: {principal_id}")
 
@@ -104,7 +63,7 @@ symbol = "TRAVEL3"
 description = "Historic Places NFT Collection on ICP"
 
 # Build the command with the principal ID directly in the string
-install = f'''dfx canister install Travel3Nft_backend --argument='("{logo_url}", "{name}", "{symbol}", "{description}", principal "{principal_id}", null)';'''
+install = f'''{DFX_PATH} canister install Travel3Nft_backend --network={DFX_NETWORK} --argument='("{logo_url}", "{name}", "{symbol}", "{description}", principal "{principal_id}", null)';'''
 
 print(install)
 run_command(install)
@@ -204,7 +163,7 @@ for i in range(0, MINT_NUMBER):
     }}"""
     
     # Mint the NFT with properly formatted command
-    mint_cmd = f'dfx canister call Travel3Nft_backend mint "({admin_principal}, {TokenMetadata})"'
+    mint_cmd = f'{DFX_PATH} canister call Travel3Nft_backend mint "({admin_principal}, {TokenMetadata})" --network={DFX_NETWORK}'
     print(f"Minting Historical Place NFT... idx: {i}")
     print(mint_cmd)
     run_command(mint_cmd)
@@ -213,18 +172,16 @@ for i in range(0, MINT_NUMBER):
     time.sleep(2)
 
     # Fix the image location command with proper string handling
-    setImageLocation = f'dfx canister call Travel3Nft_backend setImageLocation "({i}:nat, record {{ icp = {slach_quote}{place["imageUrl"]}{slach_quote}; ipfs = {slach_quote}{slach_quote} }})"'
+    setImageLocation = f'{DFX_PATH} canister call Travel3Nft_backend setImageLocation "({i}:nat, record {{ icp = {slach_quote}{place["imageUrl"]}{slach_quote}; ipfs = {slach_quote}{slach_quote} }})" --network={DFX_NETWORK}'
     print(f"Setting Image Location... idx: {i}")
     run_command(setImageLocation)
     
     # Fix the document location command with proper string handling
-    setDocumentLocation = f'dfx canister call Travel3Nft_backend setDocumentLocation "({i}:nat, record {{ icp = {slach_quote}{place["documentUrl"]}{slach_quote}; ipfs = {slach_quote}{slach_quote} }})"'
+    setDocumentLocation = f'{DFX_PATH} canister call Travel3Nft_backend setDocumentLocation "({i}:nat, record {{ icp = {slach_quote}{place["documentUrl"]}{slach_quote}; ipfs = {slach_quote}{slach_quote} }})" --network={DFX_NETWORK}'
     print(f"Setting Document Location... idx: {i}")
     run_command(setDocumentLocation)
     
     print(f"Successfully minted Historical Place NFT: {place['name']}")
     print("-" * 50)
 
-# Clean up at the end
-print("Minting complete. Shutting down local replica...")
-cleanup()
+print("Minting complete.")

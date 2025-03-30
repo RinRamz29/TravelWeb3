@@ -1,258 +1,223 @@
 #!/bin/bash
 set -e
 
-# Create the NFT minting script directly if it doesn't exist
-if [ "$1" = "mint" ] || [ "$1" = "create-script" ]; then
-    echo "Creating NFT minting script..."
-    cat > /home/ic-user/mint_nfts.py << 'ENDSCRIPT'
-import os
-import json
-import time
-import subprocess
-import signal
-import sys
+# Print debug info
+echo "Checking environment:"
+echo "Current user: $(whoami)"
+echo "HOME: $HOME"
+echo "PATH: $PATH"
+echo "Working directory: $(pwd)"
+echo "Command arguments: $@"
 
-# Character definitions for escaping
-slach = chr(92)  # \
-quote = chr(34)  # "
-quote_one = chr(39)  # '
-slach_quote = chr(92) + chr(34)  # \"
-
-def run_command(command, check_output=False):
-    """Run a shell command and optionally return its output"""
-    print(f"Running command: {command}")
-    
-    if check_output:
-        try:
-            result = subprocess.check_output(command, shell=True, stderr=subprocess.STDOUT, universal_newlines=True)
-            return result.strip()
-        except subprocess.CalledProcessError as e:
-            print(f"Command failed with exit code {e.returncode}")
-            print(f"Output: {e.output}")
-            return None
-    else:
-        return os.system(command)
-
-def wait_for_network_ready(max_attempts=20, delay=5):
-    """Wait for the local network to be ready"""
-    for attempt in range(max_attempts):
-        print(f"Checking if network is ready (attempt {attempt+1}/{max_attempts})...")
-        result = run_command("dfx ping", check_output=True)
-        if result and "The replica is running" in result:
-            print("Local replica is running and ready!")
-            return True
-        print(f"Network not ready yet. Waiting {delay} seconds...")
-        time.sleep(delay)
-    
-    print("Failed to start local network after maximum attempts.")
-    return False
-
-# Clean up any existing processes
-print("Cleaning up environment...")
-run_command("killall dfx 2>/dev/null || true")
-run_command("rm -rf .dfx")
-
-# Start the local replica
-print("Starting local network...")
-dfx_process = subprocess.Popen(
-    "dfx start --clean",
-    shell=True,
-    stdout=subprocess.PIPE,
-    stderr=subprocess.STDOUT,
-    universal_newlines=True
-)
-
-# Register a signal handler to terminate the dfx process on script exit
-def cleanup(signum=None, frame=None):
-    if dfx_process:
-        print("Terminating dfx process...")
-        dfx_process.terminate()
-        try:
-            dfx_process.wait(timeout=5)  # Wait for process to terminate
-        except:
-            print("Failed to terminate dfx process cleanly")
-    
-    if signum is not None:  # Only exit if this was called as a signal handler
-        sys.exit(0)
-
-# Set up signal handlers
-signal.signal(signal.SIGINT, cleanup)
-signal.signal(signal.SIGTERM, cleanup)
-
-# Give the network time to start
-time.sleep(10)
-
-# Wait for the network to be ready
-if not wait_for_network_ready(max_attempts=15, delay=5):
-    print("Could not start the local replica. Exiting.")
-    cleanup()
-    sys.exit(1)
-
-# Create canisters
-print("Creating canisters...")
-run_command("dfx canister create Travel3Nft_frontend")
-run_command("dfx canister create Travel3Nft_backend")
-run_command("dfx build")
-
-# Get principal ID
-print("Getting principal ID...")
-principal_id = run_command("dfx identity get-principal", check_output=True)
-if not principal_id:
-    print("Failed to get principal ID. Exiting.")
-    cleanup()
-    sys.exit(1)
-
-print(f"Principal ID: {principal_id}")
-
-# Format the arguments with the actual principal ID
-logo_url = "https://travel3.io/logo.png"
-name = "Travel3"
-symbol = "TRAVEL3"
-description = "Historic Places NFT Collection on ICP"
-
-# Build the command with the principal ID directly in the string
-install = f'''dfx canister install Travel3Nft_backend --argument='("{logo_url}", "{name}", "{symbol}", "{description}", principal "{principal_id}", null)';'''
-
-print(install)
-run_command(install)
-
-# Sample historical place NFTs data
-historical_places = [
-    {
-        "name": "Colosseum",
-        "location": "Rome, Italy",
-        "year": "70-80 AD",
-        "description": "An oval amphitheatre in the centre of Rome, the largest ancient amphitheatre ever built.",
-        "imageUrl": "https://travel3.io/images/colosseum.jpg",
-        "documentUrl": "https://travel3.io/docs/colosseum.pdf"
-    },
-    {
-        "name": "Machu Picchu",
-        "location": "Cusco Region, Peru",
-        "year": "1450 AD",
-        "description": "A 15th-century Inca citadel situated on a mountain ridge above the Sacred Valley.",
-        "imageUrl": "https://travel3.io/images/machu_picchu.jpg",
-        "documentUrl": "https://travel3.io/docs/machu_picchu.pdf"
-    },
-    {
-        "name": "Pyramids of Giza",
-        "location": "Giza, Egypt",
-        "year": "2560 BC",
-        "description": "The oldest and largest of the three pyramids in the Giza pyramid complex.",
-        "imageUrl": "https://travel3.io/images/pyramids.jpg",
-        "documentUrl": "https://travel3.io/docs/pyramids.pdf"
-    }
-]
-
-MINT_NUMBER = len(historical_places)
-
-for i in range(0, MINT_NUMBER):
-    admin_principal = f"principal {slach_quote}{principal_id}{slach_quote}"
-    place = historical_places[i]
-    
-    # Create token identifier
-    tokenIdentifier = f"place_{i}"
-    
-    # Create main image location
-    mainImageType = "image/jpeg"
-    imageLocation_icp = f"icp = {slach_quote}{place['imageUrl']}{slach_quote}"
-    imageLocation_ipfs = f"ipfs = {slach_quote}{slach_quote}"
-    mainImageLocation = f"mainImageLocation = record {{ {imageLocation_icp}; {imageLocation_ipfs}; }}"
-    
-    # Create document location
-    documentType = "application/pdf"
-    documentLocation_icp = f"icp = {slach_quote}{place['documentUrl']}{slach_quote}"
-    documentLocation_ipfs = f"ipfs = {slach_quote}{slach_quote}"
-    documentLocation = f"documentLocation = record {{ {documentLocation_icp}; {documentLocation_ipfs}; }}"
-    
-    # Create thumbnail location (using the same as main image for simplicity)
-    thumbnailType = "image/jpeg"
-    thumbnailLocation = f"thumbnailLocation = record {{ {imageLocation_icp}; {imageLocation_ipfs}; }}"
-    
-    # Create additional images location (empty for this example)
-    additionalImagesType = "image/jpeg"
-    additionalImagesLocation = "additionalImagesLocation = vec {}"
-    
-    # Create attributes - properly handling the coordinates string
-    attributes_name = f"{slach_quote}{place['name']}{slach_quote}"
-    attributes_location = f"{slach_quote}{place['location']}{slach_quote}"
-    attributes_year = f"{slach_quote}{place['year']}{slach_quote}"
-    attributes_description = f"{slach_quote}{place['description']}{slach_quote}"
-    attributes_collection = f"{slach_quote}Historic Places{slach_quote}"
-    attributes_category = f"{slach_quote}Landmark{slach_quote}"
-    attributes_historical_period = f"{slach_quote}Ancient{slach_quote}"
-    attributes_cultural_significance = f"{slach_quote}High{slach_quote}"
-    
-    # Fixed the attributes format with proper coordinates field
-    attributes = f"""attributes = record{{
-        name = {attributes_name};
-        location = {attributes_location};
-        coordinates = {slach_quote}{slach_quote};
-        collection = {attributes_collection};
-        year = {attributes_year};
-        category = {attributes_category};
-        historicalPeriod = {attributes_historical_period};
-        culturalSignificance = {attributes_cultural_significance};
-        architecturalStyle = null
-    }}"""
-    
-    # Create token metadata with proper escaping
-    TokenMetadata = f"""opt record {{
-        tokenIdentifier = {slach_quote}{tokenIdentifier}{slach_quote};
-        mainImageType = {slach_quote}{mainImageType}{slach_quote};
-        {mainImageLocation};
-        documentType = {slach_quote}{documentType}{slach_quote};
-        {documentLocation};
-        thumbnailType = {slach_quote}{thumbnailType}{slach_quote};
-        {thumbnailLocation};
-        additionalImagesType = {slach_quote}{additionalImagesType}{slach_quote};
-        {additionalImagesLocation};
-        {attributes};
-    }}"""
-    
-    # Mint the NFT with properly formatted command
-    mint_cmd = f'dfx canister call Travel3Nft_backend mint "({admin_principal}, {TokenMetadata})"'
-    print(f"Minting Historical Place NFT... idx: {i}")
-    print(mint_cmd)
-    run_command(mint_cmd)
-    
-    # Add a delay to ensure transactions are processed
-    time.sleep(2)
-
-    # Fix the image location command with proper string handling
-    setImageLocation = f'dfx canister call Travel3Nft_backend setImageLocation "({i}:nat, record {{ icp = {slach_quote}{place["imageUrl"]}{slach_quote}; ipfs = {slach_quote}{slach_quote} }})"'
-    print(f"Setting Image Location... idx: {i}")
-    run_command(setImageLocation)
-    
-    # Fix the document location command with proper string handling
-    setDocumentLocation = f'dfx canister call Travel3Nft_backend setDocumentLocation "({i}:nat, record {{ icp = {slach_quote}{place["documentUrl"]}{slach_quote}; ipfs = {slach_quote}{slach_quote} }})"'
-    print(f"Setting Document Location... idx: {i}")
-    run_command(setDocumentLocation)
-    
-    print(f"Successfully minted Historical Place NFT: {place['name']}")
-    print("-" * 50)
-
-# Clean up at the end
-print("Minting complete. Shutting down local replica...")
-cleanup()
-ENDSCRIPT
-    chmod +x /home/ic-user/mint_nfts.py
-    echo "Script created successfully!"
+# Set HOME explicitly when running as root
+if [ "$(whoami)" = "root" ]; then
+    export HOME="/home/ic-user"
+    echo "Running as root, setting HOME to $HOME"
 fi
+
+# Set up DFXVM and select a default version
+echo "Setting up DFXVM..."
+
+# Check if dfxvm is installed and in path
+if which dfxvm > /dev/null 2>&1; then
+    echo "DFXVM is installed, setting a default version..."
+    
+    # Explicitly install version 0.25.1
+    echo "Installing DFX version 0.25.1..."
+    dfxvm install 0.25.1 || echo "Failed to install version 0.25.1, continuing anyway..."
+    
+    # Set as default
+    echo "Setting 0.25.1 as default version..."
+    dfxvm default 0.25.1
+    
+    # Make sure dfx is now accessible
+    if ! which dfx > /dev/null 2>&1; then
+        echo "Setting up dfx in path..."
+        export PATH="/root/.local/share/dfx/bin:$PATH"
+    fi
+else
+    echo "DFXVM not found, checking for standalone dfx..."
+    
+    # Common locations for dfx binary
+    DFX_LOCATIONS=(
+        "/root/.local/share/dfx/bin/dfx"
+        "/root/.local/share/dfx/versions/0.25.1/dfx"
+        "/home/ic-user/.local/share/dfx/bin/dfx"
+        "/home/ic-user/.local/share/dfx/versions/0.25.1/dfx"
+        "/usr/local/bin/dfx"
+    )
+    
+    for LOCATION in "${DFX_LOCATIONS[@]}"; do
+        if [ -f "$LOCATION" ] && [ -x "$LOCATION" ]; then
+            echo "Found dfx at $LOCATION"
+            export PATH="$(dirname "$LOCATION"):$PATH"
+            ln -sf "$LOCATION" /usr/local/bin/dfx
+            break
+        fi
+    done
+    
+    # If dfx is still not found, try to install it
+    if ! which dfx > /dev/null 2>&1; then
+        echo "DFX not found, installing via DFXVM..."
+        export DFXVM_INIT_YES=true
+        curl -fsSL https://internetcomputer.org/install.sh | sh
+        export PATH="/root/.local/share/dfx/bin:$PATH"
+        dfxvm install 0.25.1 || echo "Failed to install version 0.25.1, continuing anyway..."
+        dfxvm default 0.25.1
+    fi
+fi
+
+# Final check for dfx in PATH
+if ! which dfx > /dev/null 2>&1; then
+    echo "ERROR: Could not find or install dfx."
+    echo "Attempting manual installation of standalone dfx..."
+    
+    # Install standalone dfx as a fallback
+    DFX_VERSION=0.25.1
+    echo "Installing standalone dfx version ${DFX_VERSION}..."
+    
+    # Download and install dfx directly
+    mkdir -p /usr/local/bin
+    curl -fsSL "https://github.com/dfinity/sdk/releases/download/${DFX_VERSION}/dfx-${DFX_VERSION}-x86_64-linux.tar.gz" | tar -xz -C /usr/local/bin
+    
+    if ! which dfx > /dev/null 2>&1; then
+        echo "Critical error: All attempts to install dfx have failed."
+        exit 1
+    fi
+fi
+
+echo "DFX executable path: $(which dfx)"
+echo "DFX version: $(dfx --version 2>&1 || echo "Could not determine dfx version")"
+
+# Set environment variables for dfx
+# Note: We're not using --disable-crypto-key-verification flag as it may not be supported
+export DFX_NOT_REMOTE=true 
+export DFX_DISABLE_AUTH_FETCH=true
+
+# Function to fix crypto directory permissions
+fix_dfx_permissions() {
+    echo "Fixing DFX crypto directory permissions..."
+    # Clean any existing .dfx directory
+    if [ -d ".dfx" ]; then
+        echo "Removing existing .dfx directory..."
+        rm -rf .dfx
+    fi
+    
+    # Create the directory structure with correct permissions
+    mkdir -p .dfx/network/local/state/replicated_state/node-100/crypto
+    
+    # Set very strict permissions on the crypto directory
+    chmod 700 .dfx/network/local/state/replicated_state/node-100/crypto
+    
+    # Make sure parent directories don't have world-writable permissions
+    chmod 755 .dfx
+    chmod 755 .dfx/network
+    chmod 755 .dfx/network/local
+    chmod 755 .dfx/network/local/state
+    chmod 755 .dfx/network/local/state/replicated_state
+    chmod 755 .dfx/network/local/state/replicated_state/node-100
+    
+    # Fix ownership if running as root
+    if [ "$(whoami)" = "root" ]; then
+        echo "Setting correct ownership for .dfx directory..."
+        chown -R ic-user:ic-user .dfx
+        # Ensure the crypto directory still has correct permissions
+        chmod 700 .dfx/network/local/state/replicated_state/node-100/crypto
+    fi
+}
 
 # Start dfx in the background if requested
 if [ "$1" = "dfx-start" ]; then
     echo "Starting dfx in background mode..."
-    dfx start --clean --background
+    cd /home/ic-user/project || exit 1
+    
+    # Fix permissions before starting
+    fix_dfx_permissions
+    
+    # Deploy Internet Identity canister
+    echo "Deploying Internet Identity canister..."
+    cd /home/ic-user/project
+    
+    # Deploy the Internet Identity canister
+    echo "Deploying Internet Identity canister..."
+    dfx deploy internet_identity || echo "Warning: Failed to deploy Internet Identity canister, but continuing..."
+    echo "Internet Identity canister deployment completed"
+    
+    # Make sure the network directory exists with proper permissions
+    mkdir -p .dfx/network
+    chmod -R 755 .dfx
+    
+    echo "Starting local IC replica with disabled crypto key verification..."
+    
+    # Run dfx command with more verbose output and error handling
+    set +e
+    # Try first without the --disable-crypto-key-verification flag
+    echo "Attempting to start dfx without --disable-crypto-key-verification flag..."
+    # Check crypto directory permissions one more time before starting
+    ls -la .dfx/network/local/state/replicated_state/node-100
+    chmod 700 .dfx/network/local/state/replicated_state/node-100/crypto
+    ls -la .dfx/network/local/state/replicated_state/node-100/crypto
+    
+    dfx start --clean --background --host 0.0.0.0:8000
+    DFX_START_RESULT=$?
+    
+    if [ $DFX_START_RESULT -ne 0 ]; then
+        echo "ERROR: dfx start command failed with exit code $DFX_START_RESULT"
+        echo "Attempting to run with different arguments..."
+        # Try with network flag as a fallback
+        dfx start --clean --background --host 0.0.0.0:8000 --network=local
+        DFX_START_RESULT=$?
+        
+        if [ $DFX_START_RESULT -ne 0 ]; then
+            echo "ERROR: All attempts to start dfx have failed."
+            echo "Checking dfx status..." 
+            dfx info
+            dfx status --network=local
+            exit 1
+        fi
+    fi
+    set -e
+    
+    echo "IC replica started. Running ping check to verify..."
+    # Try to ping the replica to make sure it's really running
+    sleep 5
+    dfx ping || echo "Warning: Initial ping failed, but container will remain running"
+    
     # Keep container running
-    tail -f /dev/null
+    echo "Container will now remain running. Use docker logs to view output."
+    exec tail -f /dev/null
+    
 elif [ "$1" = "mint" ]; then
     echo "Running NFT minting script..."
-    cd /home/ic-user
-    python3 /home/ic-user/mint_nfts.py
-elif [ "$1" = "bash" ] || [ "$1" = "shell" ]; then
-    exec bash
+    cd /home/ic-user/project
+    
+    # Check if ic-replica is running
+    echo "Waiting for IC replica to be ready..."
+    MAX_ATTEMPTS=30
+    ATTEMPT=1
+    
+    while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
+        echo "Attempt $ATTEMPT/$MAX_ATTEMPTS: Checking if IC replica is running..."
+        if dfx ping --network ic-replica 2>/dev/null; then
+            echo "IC replica is ready! Proceeding with minting."
+            break
+        fi
+        
+        if [ $ATTEMPT -eq $MAX_ATTEMPTS ]; then
+            echo "Failed to connect to IC replica after $MAX_ATTEMPTS attempts. Exiting."
+            exit 1
+        fi
+        
+        echo "IC replica not ready yet. Waiting 5 seconds..."
+        sleep 5
+        ATTEMPT=$((ATTEMPT + 1))
+    done
+    
+    # Execute the mint_nfts.py script
+    python3 /home/ic-user/project/mint_nfts.py
 else
-    # Execute the command passed to docker run
-    exec "$@"
+    # Default behavior if no specific command is given
+    echo "No specific command provided. Starting an interactive shell."
+    cd /home/ic-user/project
+    exec bash
 fi

@@ -7,7 +7,8 @@
   "scripts": {
     "build": "npm run build --workspace=Travel3Nft_frontend",
     "prebuild": "npm run prebuild --workspaces --if-present",
-    "start": "dfx start --background && npm run dev --workspace=Travel3Nft_frontend",
+    "pretest": "npm run prebuild --workspaces --if-present",
+    "start": "npm start --workspaces --if-present",
     "test": "npm test --workspaces --if-present"
   },
   "type": "module",

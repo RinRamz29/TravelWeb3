@@ -9,41 +9,20 @@ services:
       - "8080:8080"  # Frontend canister
     volumes:
       - .:/home/ic-user/project
+      # Exclude .dfx directory from the main mount
+      - /home/ic-user/project/.dfx
+      # Use separate volumes for important directories
+      - dfx-data:/home/ic-user/project/.dfx
       - dfx-cache:/home/ic-user/.cache/dfx
       - identity:/home/ic-user/.config/dfx/identity
-    command: dfx-start
-    restart: unless-stopped
-
-  mint-nfts:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    depends_on:
-      - ic-replica
-    volumes:
-      - .:/home/ic-user/project
-      - dfx-cache:/home/ic-user/.cache/dfx
-      - identity:/home/ic-user/.config/dfx/identity
-    # We don't need to mount mint_nfts.py since it's embedded in the entrypoint
-    command: mint
+    entrypoint: []
+    command: bash -c "/home/ic-user/project/start-ic.sh"
+    restart: always
+    user: root
     environment:
-      - DFX_NETWORK_HOST=ic-replica
-
-  # Shell for interactive work with dfx tools
-  dfx-shell:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    volumes:
-      - .:/home/ic-user/project
-      - dfx-cache:/home/ic-user/.cache/dfx
-      - identity:/home/ic-user/.config/dfx/identity
-    command: bash
-    stdin_open: true
-    tty: true
-    environment:
-      - DFX_NETWORK_HOST=ic-replica
-
+      - DFX_TELEMETRY_DISABLED=1
+      - RUST_BACKTRACE=1
 volumes:
+  dfx-data:
   dfx-cache:
   identity:
