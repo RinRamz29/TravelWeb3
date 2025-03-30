@@ -1,78 +1,62 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { useNotification } from '../context/NotificationContext';
-import { formatPrincipal } from '../utils/helpers';
 
 const Header = () => {
-  const [scrolled, setScrolled] = useState(false);
+  const location = useLocation();
   const { isAuthenticated, principal, login, logout, isLoading } = useAuth();
-  const { showSuccess, showError } = useNotification();
-
-  useEffect(() => {
-    const handleScroll = () => {
-      const isScrolled = window.scrollY > 10;
-      if (isScrolled !== scrolled) {
-        setScrolled(isScrolled);
-      }
-    };
-    document.addEventListener('scroll', handleScroll);
-    return () => {
-      document.removeEventListener('scroll', handleScroll);
-    };
-  }, [scrolled]);
-
-  const handleConnectWallet = async () => {
-    if (isAuthenticated) {
-      await logout();
-      showSuccess('Wallet disconnected successfully');
-    } else {
-      try {
-        const success = await login();
-        if (success) {
-          showSuccess('Wallet connected successfully');
-        }
-      } catch (error) {
-        showError('Failed to connect wallet: ' + error.message);
-      }
-    }
+  
+  const formatPrincipal = (principal) => {
+    if (!principal) return '';
+    const principalText = principal.toString();
+    return `${principalText.substring(0, 5)}...${principalText.substring(principalText.length - 5)}`;
   };
-
+  
   return (
-    <header className={`app-header ${scrolled ? 'scrolled' : ''}`}>
-      <div className="header-bottom">
-        {/* Logo section */}
-        <div className="logo-container">
-          <svg width="40" height="40" viewBox="0 0 100 100">
-            <ellipse 
-              cx="50" cy="50" rx="30" ry="20" 
-              fill="none" 
-              stroke="#d53f8c" 
-              strokeWidth="2" 
-              transform="rotate(45 50 50)" 
-            />
-            <ellipse 
-              cx="50" cy="50" rx="30" ry="20" 
-              fill="none" 
-              stroke="#d53f8c" 
-              strokeWidth="2" 
-              transform="rotate(-45 50 50)" 
-            />
+    <header className="app-header">
+      <div className="logo-container">
+        <Link to="/">
+          <svg className="logo" width="50" height="50" viewBox="0 0 100 100">
+            <path d="M50 10 L20 40 L50 70 L80 40 Z" fill="none" stroke="#e84393" strokeWidth="4" />
+            <path d="M50 20 L30 40 L50 60 L70 40 Z" fill="#e84393" opacity="0.6" />
           </svg>
-          <span>Travel3</span>
-        </div>
+        </Link>
+      </div>
+      
+      <div className="header-content">
+        <nav>
+          <ul className="nav-links">
+            <li>
+              <Link to="/" className={location.pathname === '/' ? 'active' : ''}>
+                Maps
+              </Link>
+            </li>
+            <li>
+              <Link to="/my-nfts" className={location.pathname === '/my-nfts' ? 'active' : ''}>
+                My NFTs
+              </Link>
+            </li>
+            <li>
+              <Link to="/create-nft" className={location.pathname === '/create-nft' ? 'active' : ''}>
+                Create NFT
+              </Link>
+            </li>
+          </ul>
+        </nav>
         
-        {/* Wallet connection button */}
-        <div className="header-actions">
-          <button
-            className={`connect-wallet-btn ${isAuthenticated ? 'connected' : ''}`}
-            onClick={handleConnectWallet}
-            disabled={isLoading}
-          >
-            {isLoading ? 'Loading...' : isAuthenticated
-              ? `Connected: ${formatPrincipal(principal?.toString())}`
-              : 'Connect Wallet'}
-          </button>
-        </div>
+        <button
+          className="connect-button"
+          onClick={isAuthenticated ? logout : login}
+          disabled={isLoading}
+        >
+          {isLoading ? (
+            'Loading...'
+          ) : isAuthenticated ? (
+            `Connected: ${formatPrincipal(principal)}`
+          ) : (
+            'Connect with Internet Identity'
+          )}
+        </button>
       </div>
     </header>
   );

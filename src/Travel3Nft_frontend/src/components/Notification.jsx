@@ -1,28 +1,48 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
+import { useNotification } from '../context/NotificationContext';
 
-const Notification = ({ message, type, duration = 3000, onClose }) => {
-  const [visible, setVisible] = useState(true);
+const Notification = () => {
+  const { notifications, removeNotification } = useNotification();
 
+  // Auto-dismiss notifications after timeout
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setVisible(false);
-      setTimeout(() => {
-        onClose();
-      }, 300); // Allow time for fade-out animation
-    }, duration);
+    if (notifications.length > 0) {
+      const timer = setTimeout(() => {
+        removeNotification(notifications[0].id);
+      }, 5000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [notifications, removeNotification]);
 
-    return () => clearTimeout(timer);
-  }, [duration, onClose]);
+  if (notifications.length === 0) {
+    return null;
+  }
 
   return (
-    <div className={`notification ${type} ${visible ? 'visible' : 'hidden'}`}>
-      <div className="notification-content">
-        {type === 'error' && <span className="icon">⚠️</span>}
-        {type === 'success' && <span className="icon">✅</span>}
-        {type === 'info' && <span className="icon">ℹ️</span>}
-        <p>{message}</p>
-      </div>
-      <button className="close-notification" onClick={() => setVisible(false)}>×</button>
+    <div className="notification-container">
+      {notifications.map((notification) => (
+        <div 
+          key={notification.id} 
+          className={`notification ${notification.type}`}
+        >
+          <div className="notification-content">
+            <div className="notification-icon">
+              {notification.type === 'success' && '✓'}
+              {notification.type === 'error' && '✕'}
+              {notification.type === 'info' && 'ℹ'}
+              {notification.type === 'warning' && '⚠'}
+            </div>
+            <div className="notification-message">{notification.message}</div>
+          </div>
+          <button 
+            className="notification-close" 
+            onClick={() => removeNotification(notification.id)}
+          >
+            ×
+          </button>
+        </div>
+      ))}
     </div>
   );
 };

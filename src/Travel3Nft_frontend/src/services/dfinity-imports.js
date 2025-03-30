@@ -1,14 +1,6 @@
-// This file serves as a centralized import point for dfinity packages
-// to help resolve any import issues
+// Import the required modules from the dfinity agent
 import { AuthClient } from "@dfinity/auth-client";
 import { HttpAgent } from "@dfinity/agent";
-import { Principal } from "@dfinity/principal";
-// Import the entire module and then extract Identity
-import * as identity from "@dfinity/identity";
 
-export {
-  AuthClient,
-  HttpAgent,
-  Principal,
-  identity
-};
+// Export the modules for use in other files
+export { AuthClient, HttpAgent };
