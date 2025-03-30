@@ -11,12 +11,12 @@ class NFTService {
 
     this.nftCanister = backendActor;
     this.assetCanister = frontendActor;
-    
+
     // Get network from environment variables
     this.network = process.env.DFX_NETWORK || "local";
-    this.isLocalDevelopment = this.network !== "ic" || 
-                             window.location.hostname.includes('localhost') || 
-                             window.location.hostname.includes('127.0.0.1');
+    this.isLocalDevelopment = this.network !== "ic" ||
+      window.location.hostname.includes('localhost') ||
+      window.location.hostname.includes('127.0.0.1');
 
     // Log canister availability status and IDs
     console.log("NFT Service initialization:",
@@ -43,18 +43,41 @@ class NFTService {
 
     try {
       console.log("Fetching all NFTs from backend canister");
+
+      // Check if the method exists before calling it
+      if (typeof this.nftCanister.getAllTokens !== 'function') {
+        console.warn("getAllTokens method not found on NFT canister. Available methods:",
+          Object.keys(this.nftCanister));
+
+        // Try alternative method names that might exist
+        if (typeof this.nftCanister.get_all_tokens === 'function') {
+          console.log("Using get_all_tokens method instead");
+          const tokens = await this.nftCanister.get_all_tokens();
+          console.log("Received tokens:", tokens);
+          return tokens.map(token => this.formatNFTData(token));
+        } else if (typeof this.nftCanister.listTokens === 'function') {
+          console.log("Using listTokens method instead");
+          const tokens = await this.nftCanister.listTokens();
+          console.log("Received tokens:", tokens);
+          return tokens.map(token => this.formatNFTData(token));
+        } else {
+          console.error("No suitable method found to get all tokens");
+          return this.getMockNFTs();
+        }
+      }
+
       const tokens = await this.nftCanister.getAllTokens();
       console.log("Received tokens:", tokens);
 
       return tokens.map(token => this.formatNFTData(token));
     } catch (error) {
       console.error("Error fetching all NFTs:", error);
-      
+
       // Check if this is a certificate verification error
       if (this.isCertificateError(error) && this.isLocalDevelopment) {
         console.log("Certificate verification error detected in local development - reinitializing with disabled verification");
         await this.initializeActorsWithDisabledVerification();
-        
+
         try {
           // Retry after reinitialization
           const tokens = await this.nftCanister.getAllTokens();
@@ -63,7 +86,7 @@ class NFTService {
           console.error("Retry failed after disabling certificate verification:", retryError);
         }
       }
-      
+
       // Fallback to mock data if there's an error
       return this.getMockNFTs();
     }
@@ -72,24 +95,24 @@ class NFTService {
   // Helper to check if an error is related to certificate verification
   isCertificateError(error) {
     const errorString = error.toString().toLowerCase();
-    return errorString.includes('certificate') && 
-           (errorString.includes('verification') || 
-            errorString.includes('verify') || 
-            errorString.includes('signature'));
+    return errorString.includes('certificate') &&
+      (errorString.includes('verification') ||
+        errorString.includes('verify') ||
+        errorString.includes('signature'));
   }
 
   // Initialize actors with certificate verification disabled for local development
   async initializeActorsWithDisabledVerification() {
     console.log("Initializing actors with certificate verification disabled");
-    
+
     try {
       const identity = await authService.getIdentity();
-      
+
       if (!identity) {
         console.warn("No identity available for actor initialization");
         return;
       }
-      
+
       const host = "http://localhost:8000";
       const options = {
         host: host,
@@ -97,20 +120,23 @@ class NFTService {
           disableCertificateVerification: true
         }
       };
-      
+
       // Create backend actor with certificate verification disabled
       if (this.BACKEND_CANISTER_ID) {
         this.nftCanister = await createActorWithOptions(
-          identity, 
+          identity,
           { ...options, canisterId: this.BACKEND_CANISTER_ID }
         );
+
+        // Debug: Log available methods on the canister
         console.log("NFT canister initialized with certificate verification disabled");
+        console.log("Available methods:", Object.keys(this.nftCanister));
       }
-      
+
       // Create frontend actor with certificate verification disabled
       if (this.FRONTEND_CANISTER_ID) {
         this.assetCanister = await createActorWithOptions(
-          identity, 
+          identity,
           { ...options, canisterId: this.FRONTEND_CANISTER_ID }
         );
         console.log("Asset canister initialized with certificate verification disabled");
@@ -126,7 +152,7 @@ class NFTService {
       console.log("Local development detected - initializing actors with certificate verification disabled");
       return this.initializeActorsWithDisabledVerification();
     }
-    
+
     // Regular initialization for production
     if (!this.nftCanister) {
       console.log("NFT canister not available, attempting to initialize...");
@@ -156,6 +182,8 @@ class NFTService {
         if (status && status.backendActor) {
           this.nftCanister = backendActor;
           console.log("NFT canister initialized from global actor");
+          // Debug log to inspect available methods
+          console.log("Available methods on global actor:", Object.keys(this.nftCanister));
         } else {
           // Try to create a new actor instance with proper canister ID
           try {
@@ -169,6 +197,8 @@ class NFTService {
                 canisterId: this.BACKEND_CANISTER_ID,
               });
               console.log("NFT canister initialized with new actor instance");
+              // Debug log to inspect available methods
+              console.log("Available methods on new actor:", Object.keys(this.nftCanister));
             } else {
               console.error("Cannot create backend actor without identity");
             }
@@ -188,7 +218,7 @@ class NFTService {
               if (!this.FRONTEND_CANISTER_ID) {
                 throw new Error("Frontend canister ID is not available in environment variables");
               }
-              
+
               if (identity) {
                 this.assetCanister = await createFrontendActor(identity, {
                   canisterId: this.FRONTEND_CANISTER_ID,
@@ -209,30 +239,122 @@ class NFTService {
   }
 
   formatNFTData(token) {
-    const metadata = token.metadata[0];
+    // Check if token is in the expected format
+    if (!token || typeof token !== 'object') {
+      console.warn("Unexpected token format:", token);
+      return {
+        id: "unknown",
+        tokenId: "unknown",
+        owner: "unknown",
+        highlighted: false,
+        metadata: {
+          mainImageUrl: "",
+          documentUrl: "",
+          attributes: {
+            name: "Unknown NFT",
+            location: "Unknown Location",
+            year: "Unknown Year",
+            culturalSignificance: ""
+          }
+        }
+      };
+    }
+
+    // Handle different token formats that might come from different methods
+    let tokenIndex = token.index;
+    let tokenOwner = token.owner;
+    let tokenMetadata = token.metadata;
+
+    // Check for alternative property names
+    if (tokenIndex === undefined && token.tokenIndex !== undefined) {
+      tokenIndex = token.tokenIndex;
+    }
+    if (tokenIndex === undefined && token.id !== undefined) {
+      tokenIndex = token.id;
+    }
+
+    if (tokenOwner === undefined && token.principal !== undefined) {
+      tokenOwner = token.principal;
+    }
+
+    if (tokenMetadata === undefined && token.meta !== undefined) {
+      tokenMetadata = token.meta;
+    }
+
+    // If metadata is an array, take the first item
+    const metadata = Array.isArray(tokenMetadata) ? tokenMetadata[0] : tokenMetadata;
+
+    // If metadata is not found, create a placeholder
+    if (!metadata) {
+      return {
+        id: tokenIndex ? tokenIndex.toString() : "unknown",
+        tokenId: tokenIndex ? tokenIndex.toString() : "unknown",
+        owner: tokenOwner ? tokenOwner.toString() : "unknown",
+        highlighted: false,
+        metadata: {
+          mainImageUrl: "",
+          documentUrl: "",
+          attributes: {
+            name: "Unnamed NFT",
+            location: "Unknown Location",
+            year: "Unknown Year",
+            culturalSignificance: ""
+          }
+        }
+      };
+    }
+
+    // Handle different metadata formats
+    let mainImageUrl = "";
+    let documentUrl = "";
+    let attributes = {};
+
+    if (metadata.mainImageLocation) {
+      if (typeof metadata.mainImageLocation === 'object') {
+        mainImageUrl = metadata.mainImageLocation.icp || metadata.mainImageLocation.ipfs || "";
+      } else {
+        mainImageUrl = metadata.mainImageLocation;
+      }
+    }
+
+    if (metadata.documentLocation) {
+      if (typeof metadata.documentLocation === 'object') {
+        documentUrl = metadata.documentLocation.icp || metadata.documentLocation.ipfs || "";
+      } else {
+        documentUrl = metadata.documentLocation;
+      }
+    }
+
+    if (metadata.attributes) {
+      attributes = metadata.attributes;
+    } else if (metadata.properties) {
+      attributes = metadata.properties;
+    }
+
     return {
-      id: token.index.toString(),
-      tokenId: token.index.toString(),
-      owner: token.owner.toString(),
+      id: tokenIndex ? tokenIndex.toString() : "unknown",
+      tokenId: tokenIndex ? tokenIndex.toString() : "unknown",
+      owner: tokenOwner ? tokenOwner.toString() : "unknown",
       highlighted: false,
       metadata: {
-        mainImageUrl: metadata?.mainImageLocation?.icp || "",
-        documentUrl: metadata?.documentLocation?.icp || "",
+        mainImageUrl: mainImageUrl,
+        documentUrl: documentUrl,
         attributes: {
-          name: metadata?.attributes?.name || "Unnamed NFT",
-          location: metadata?.attributes?.location || "Unknown Location",
-          year: metadata?.attributes?.year || "Unknown Year",
-          culturalSignificance: metadata?.attributes?.culturalSignificance || ""
+          name: attributes.name || "Unnamed NFT",
+          location: attributes.location || "Unknown Location",
+          year: attributes.year || "Unknown Year",
+          culturalSignificance: attributes.culturalSignificance || ""
         }
       }
     };
   }
 
+  // Rest of the NFTService methods remain the same...
   async getUserNFTs() {
     if (!this.nftCanister) {
       console.error("NFT canister is not available for getUserNFTs");
       await this.initializeActors();
-      
+
       // If still not available, return mock data
       if (!this.nftCanister) {
         return this.getMockNFTs();
@@ -250,16 +372,38 @@ class NFTService {
       console.log("Getting principal for NFT query");
       const principal = await authService.getPrincipal();
       console.log("Fetching NFTs for principal:", principal.toString());
+
+      // Check if the expected method exists
+      if (typeof this.nftCanister.getUserTokens !== 'function') {
+        console.warn("getUserTokens method not found. Available methods:",
+          Object.keys(this.nftCanister));
+
+        // Try alternative method names
+        if (typeof this.nftCanister.get_user_tokens === 'function') {
+          console.log("Using get_user_tokens method instead");
+          return await this.nftCanister.get_user_tokens(principal);
+        } else if (typeof this.nftCanister.tokens === 'function') {
+          console.log("Using tokens method instead");
+          return await this.nftCanister.tokens(principal);
+        } else if (typeof this.nftCanister.tokensOf === 'function') {
+          console.log("Using tokensOf method instead");
+          return await this.nftCanister.tokensOf(principal);
+        } else {
+          console.error("No suitable method found to get user tokens");
+          return this.getMockNFTs();
+        }
+      }
+
       const nfts = await this.nftCanister.getUserTokens(principal);
       return nfts;
     } catch (error) {
       console.error("Error fetching user NFTs:", error);
-      
+
       // Check if this is a certificate verification error
       if (this.isCertificateError(error) && this.isLocalDevelopment) {
         console.log("Certificate verification error detected in local development - reinitializing");
         await this.initializeActorsWithDisabledVerification();
-        
+
         try {
           // Retry after reinitialization
           const principal = await authService.getPrincipal();
@@ -268,12 +412,12 @@ class NFTService {
           console.error("Retry failed after disabling certificate verification:", retryError);
         }
       }
-      
+
       // Return mock data for local development
       if (this.isLocalDevelopment) {
         return this.getMockNFTs();
       }
-      
+
       throw error;
     }
   }
@@ -282,7 +426,7 @@ class NFTService {
     if (!this.nftCanister) {
       console.error("NFT canister is not available");
       await this.initializeActors();
-      
+
       if (!this.nftCanister && this.isLocalDevelopment) {
         // Return mock data for local development
         return this.getMockNFTs().find(nft => nft.id === tokenId.toString());
@@ -290,16 +434,40 @@ class NFTService {
     }
 
     try {
+      // Check if the expected method exists
+      if (typeof this.nftCanister.getTokenInfo !== 'function') {
+        console.warn("getTokenInfo method not found. Available methods:",
+          Object.keys(this.nftCanister));
+
+        // Try alternative method names
+        if (typeof this.nftCanister.get_token_info === 'function') {
+          console.log("Using get_token_info method instead");
+          return await this.nftCanister.get_token_info(BigInt(tokenId));
+        } else if (typeof this.nftCanister.tokenInfo === 'function') {
+          console.log("Using tokenInfo method instead");
+          return await this.nftCanister.tokenInfo(BigInt(tokenId));
+        } else if (typeof this.nftCanister.token === 'function') {
+          console.log("Using token method instead");
+          return await this.nftCanister.token(BigInt(tokenId));
+        } else {
+          console.error("No suitable method found to get token info");
+          if (this.isLocalDevelopment) {
+            return this.getMockNFTs().find(nft => nft.id === tokenId.toString());
+          }
+          throw new Error("Token info method not available");
+        }
+      }
+
       const nftDetails = await this.nftCanister.getTokenInfo(BigInt(tokenId));
       return nftDetails;
     } catch (error) {
       console.error("Error fetching NFT details:", error);
-      
+
       // Check if this is a certificate verification error
       if (this.isCertificateError(error) && this.isLocalDevelopment) {
         console.log("Certificate verification error detected in local development - reinitializing");
         await this.initializeActorsWithDisabledVerification();
-        
+
         try {
           // Retry after reinitialization
           return await this.nftCanister.getTokenInfo(BigInt(tokenId));
@@ -307,7 +475,7 @@ class NFTService {
           console.error("Retry failed after disabling certificate verification:", retryError);
         }
       }
-      
+
       throw error;
     }
   }
@@ -318,11 +486,11 @@ class NFTService {
       console.log("Local development mode detected - using mock minting");
       return this.mockMintNFT(metadata);
     }
-    
+
     if (!this.nftCanister) {
       console.error("NFT canister is not available");
       await this.initializeActors();
-      
+
       if (!this.nftCanister) {
         if (this.isLocalDevelopment) {
           return this.mockMintNFT(metadata);
@@ -361,18 +529,39 @@ class NFTService {
 
       console.log("Minting with metadata:", JSON.stringify(tokenMetadata));
 
+      // Check if the mint method exists
+      if (typeof this.nftCanister.mint !== 'function') {
+        console.warn("mint method not found. Available methods:",
+          Object.keys(this.nftCanister));
+
+        // Try alternative method names
+        if (typeof this.nftCanister.mintNFT === 'function') {
+          console.log("Using mintNFT method instead");
+          return await this.nftCanister.mintNFT(principal, [tokenMetadata]);
+        } else if (typeof this.nftCanister.create === 'function') {
+          console.log("Using create method instead");
+          return await this.nftCanister.create(principal, [tokenMetadata]);
+        } else {
+          console.error("No suitable method found for minting");
+          if (this.isLocalDevelopment) {
+            return this.mockMintNFT(metadata);
+          }
+          throw new Error("Minting method not available");
+        }
+      }
+
       // Call the mint function with the principal and metadata
       const result = await this.nftCanister.mint(principal, [tokenMetadata]);
       console.log("Mint result:", result);
       return result;
     } catch (error) {
       console.error("Error minting NFT:", error);
-      
+
       // Check if this is a certificate verification error
       if (this.isCertificateError(error) && this.isLocalDevelopment) {
         console.log("Certificate verification error detected during minting - reinitializing");
         await this.initializeActorsWithDisabledVerification();
-        
+
         try {
           // Retry after reinitialization
           const principal = await authService.getPrincipal();
@@ -384,24 +573,24 @@ class NFTService {
           return this.mockMintNFT(metadata);
         }
       }
-      
+
       // For local development, fall back to mock minting
       if (this.isLocalDevelopment) {
         console.log("Error in production minting flow, falling back to mock minting");
         return this.mockMintNFT(metadata);
       }
-      
+
       throw error;
     }
   }
-  
+
   // Mock NFT minting for local development
   async mockMintNFT(metadata) {
     console.log("Using mock mint for local development with metadata:", metadata);
-    
+
     // Generate a random token ID
     const tokenId = Math.floor(Math.random() * 10000) + 1000;
-    
+
     // Create a mock result that resembles what the canister would return
     const mockResult = {
       ok: {
@@ -420,10 +609,10 @@ class NFTService {
         }
       }
     };
-    
+
     // Simulate network delay
     await new Promise(resolve => setTimeout(resolve, 1500));
-    
+
     console.log("Mock minting result:", mockResult);
     return mockResult;
   }
@@ -444,21 +633,21 @@ class NFTService {
         };
         return await this.mintNFT(nftMetadata);
       }
-      
+
       // Make sure we have initialized actors
       if (!this.nftCanister) {
         const identity = await authService.getIdentity();
-        
+
         if (!identity) {
           throw new Error("User is not authenticated");
         }
-        
+
         this.nftCanister = await createBackendActor(identity, {
           canisterId: this.BACKEND_CANISTER_ID
         });
         console.log("Initialized NFT canister for createNFT");
       }
-      
+
       const nftMetadata = {
         name: metadata.title,
         location: metadata.location,
@@ -470,7 +659,7 @@ class NFTService {
       return await this.mintNFT(nftMetadata);
     } catch (error) {
       console.error("Error in createNFT:", error);
-      
+
       // For local development, use mock minting as fallback
       if (this.isLocalDevelopment) {
         console.log("Error in createNFT, falling back to mock minting");
@@ -483,7 +672,7 @@ class NFTService {
         };
         return this.mockMintNFT(nftMetadata);
       }
-      
+
       throw error;
     }
   }
@@ -494,11 +683,11 @@ class NFTService {
     try {
       // Ensure we have an identity and asset canister
       const identity = await authService.getIdentity();
-      
+
       // For local development, use base64 encoding
       if (this.isLocalDevelopment) {
         console.log("Local development mode: Using base64 encoding for file upload");
-        
+
         // Simulate upload progress
         if (progressCallback) {
           let progress = 0;
@@ -507,14 +696,14 @@ class NFTService {
             if (progress > 90) clearInterval(interval);
             progressCallback(progress);
           }, 300);
-          
+
           // After 3 seconds, complete the progress
           setTimeout(() => {
             clearInterval(interval);
             progressCallback(100);
           }, 3000);
         }
-        
+
         try {
           const base64 = await this.fileToBase64(file);
           return base64;
@@ -614,12 +803,12 @@ class NFTService {
         console.log("Store operation result:", result);
       } catch (storeError) {
         console.error("Store operation failed:", storeError);
-        
+
         // Check if this is a certificate verification error
         if (this.isCertificateError(storeError) && this.isLocalDevelopment) {
           console.log("Certificate verification error detected during file upload - reinitializing");
           await this.initializeActorsWithDisabledVerification();
-          
+
           try {
             // Retry after reinitialization
             const arrayBuffer = await this.readFileAsArrayBuffer(file);
@@ -752,13 +941,13 @@ class NFTService {
       } catch (error) {
         console.warn(`Operation failed (attempt ${i + 1}/${maxRetries}):`, error);
         lastError = error;
-        
+
         // If this is a certificate error in local development, try to reinitialize
         if (this.isCertificateError(error) && this.isLocalDevelopment && i === 0) {
           console.log("Certificate error detected, reinitializing actors with disabled verification");
           await this.initializeActorsWithDisabledVerification();
         }
-        
+
         await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
