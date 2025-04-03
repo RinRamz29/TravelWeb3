@@ -1,0 +1,66 @@
+{
+  "metadata": {
+    "0": {
+      "iv": "sample_iv_value_1",
+      "privateKey": "sample_private_key_1",
+      "photoSrc": "https://example.com/path/to/photo1.jpg",
+      "thumbnailSrc": "https://example.com/path/to/thumbnail1.jpg",
+      "documentSrc": "https://example.com/path/to/document1.pdf",
+      "tokenIdentifier": "HP001",
+      "photoType": ".jpg",
+      "photoLocation": {
+        "icp": "https://example.com/path/to/photo1.jpg",
+        "ipfs": "ipfs://example-hash-1/photo1.jpg"
+      },
+      "thumbnailType": ".jpg",
+      "thumbnailLocation": {
+        "icp": "https://example.com/path/to/thumbnail1.jpg",
+        "ipfs": "ipfs://example-hash-1/thumbnail1.jpg"
+      },
+      "documentType": ".pdf",
+      "documentLocation": {
+        "icp": "https://example.com/path/to/document1.pdf",
+        "ipfs": "ipfs://example-hash-1/document1.pdf"
+      },
+      "attributes": {
+        "name": "The Colosseum",
+        "year": 80,
+        "location": "Rome, Italy",
+        "coordinates": "41.8902°N, 12.4922°E",
+        "category": ["Monument", "Ancient", "Roman"],
+        "significance": "The Colosseum is an oval amphitheatre in the center of Rome and is considered one of the greatest works of architecture and engineering."
+      }
+    },
+    "1": {
+      "iv": "sample_iv_value_2",
+      "privateKey": "sample_private_key_2",
+      "photoSrc": "https://example.com/path/to/photo2.jpg",
+      "thumbnailSrc": "https://example.com/path/to/thumbnail2.jpg",
+      "documentSrc": "https://example.com/path/to/document2.pdf",
+      "tokenIdentifier": "HP002",
+      "photoType": ".jpg",
+      "photoLocation": {
+        "icp": "https://example.com/path/to/photo2.jpg",
+        "ipfs": "ipfs://example-hash-2/photo2.jpg"
+      },
+      "thumbnailType": ".jpg",
+      "thumbnailLocation": {
+        "icp": "https://example.com/path/to/thumbnail2.jpg",
+        "ipfs": "ipfs://example-hash-2/thumbnail2.jpg"
+      },
+      "documentType": ".pdf",
+      "documentLocation": {
+        "icp": "https://example.com/path/to/document2.pdf",
+        "ipfs": "ipfs://example-hash-2/document2.pdf"
+      },
+      "attributes": {
+        "name": "Machu Picchu",
+        "year": 1450,
+        "location": "Cusco Region, Peru",
+        "coordinates": "13.1631°S, 72.5450°W",
+        "category": ["Archaeological Site", "Inca", "Ancient"],
+        "significance": "Machu Picchu is an Incan citadel set high in the Andes Mountains in Peru, built in the 15th century and later abandoned."
+      }
+    }
+  }
+}
